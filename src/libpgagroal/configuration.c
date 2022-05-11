@@ -2737,10 +2737,6 @@ transfer_configuration(struct configuration* config, struct configuration* reloa
 
    /* states */
 
-   // decreasing the number of servers is probably a bad idea
-   if (config->number_of_servers > reload->number_of_servers)
-      restart_int("decreasing number of servers", config->number_of_servers, reload->number_of_servers);
-
    for (int i = 0; i < reload->number_of_servers; i++)
    {
       restart_server(&reload->servers[i], &config->servers[i]);
@@ -2810,8 +2806,7 @@ transfer_configuration(struct configuration* config, struct configuration* reloa
 static bool
 is_same_server(struct server* s1, struct server* s2)
 {
-
-   if(!strncmp(s1->host, s2->host, MISC_LENGTH) && s1->port == s2->port)
+   if (!strncmp(s1->host, s2->host, MISC_LENGTH) && s1->port == s2->port)
    {
       return true;
    }
@@ -2827,13 +2822,13 @@ copy_server(struct server* dst, struct server* src)
    atomic_schar state;
 
    // check the server cloned "seems" the same
-   if (is_same_server(dst,src))
+   if (is_same_server(dst, src))
    {
       state = atomic_load(&dst->state);
    }
    else
    {
-      state = SERVER_NOTINIT;
+      atomic_init(&state, SERVER_NOTINIT);
    }
 
    memset(dst, 0, sizeof(struct server));
@@ -3137,12 +3132,12 @@ as_logging_rotation_age(char* str, int* age)
 void
 pgagroal_init_pidfile_if_needed(struct configuration* config)
 {
-    if (strlen(config->pidfile) == 0)
-    {
-        // no pidfile set, use a default one
-        snprintf(config->pidfile, sizeof(config->pidfile), "%s/pgagraol.%d.pid",
-                 config->unix_socket_dir,
-                 config->port);
-        pgagroal_log_debug("PID file automatically set to: [%s]", config->pidfile);
-    }
+   if (strlen(config->pidfile) == 0)
+   {
+      // no pidfile set, use a default one
+      snprintf(config->pidfile, sizeof(config->pidfile), "%s/pgagraol.%d.pid",
+               config->unix_socket_dir,
+               config->port);
+      pgagroal_log_debug("PID file automatically set to: [%s]", config->pidfile);
+   }
 }
