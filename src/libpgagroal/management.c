@@ -1804,14 +1804,17 @@ pgagroal_management_read_config_get(int socket, char* config_key, char* expected
 {
 
    cJSON* json = pgagroal_managment_json_read_config_get(socket, config_key, expected_value);
+   int status = EXIT_STATUS_DATA_ERROR;
 
    if (!json)
    {
       goto error;
    }
 
+   status = pgagroal_json_command_object_exit_status(json);
    if (output_format == COMMAND_OUTPUT_FORMAT_JSON)
    {
+
       pgagroal_json_print_and_free_json_object(json);
       goto end;
    }
@@ -1830,7 +1833,7 @@ pgagroal_management_read_config_get(int socket, char* config_key, char* expected
    }
 
 end:
-   return pgagroal_json_command_object_exit_status(json);
+   return status;
 
 error:
 
