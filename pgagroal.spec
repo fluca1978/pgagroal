@@ -108,6 +108,7 @@ cd %{buildroot}%{_libdir}/
 %{_docdir}/%{name}/README.md
 %{_docdir}/%{name}/RPM.md
 %{_docdir}/%{name}/SECURITY.md
+%{_docdir}/%{name}/DISTRIBUTIONS.md
 %{_docdir}/%{name}/grafana/dashboard.json
 %{_docdir}/%{name}/grafana/README.md
 %{_docdir}/%{name}/etc/pgagroal.service
