@@ -68,7 +68,7 @@
 #define COMMAND_STATUS          "status"
 #define COMMAND_STATUS_DETAILS  "status-details"
 #define COMMAND_SWITCH_TO       "switch-to"
-/* #define COMMAND_CONFIG_GET      "conf-get" */
+#define COMMAND_CONFIG_GET      "conf-get"
 /* #define COMMAND_CONFIG_LS       "conf-ls" */
 /* #define COMMAND_CONFIG_SET      "conf-set" */
 
@@ -91,7 +91,7 @@ static void help_status_details(void);
 static void help_switch_to(void);
 
 static int cancel_shutdown(SSL* ssl, int socket, uint8_t compression, uint8_t encryption, int32_t output_format);
-/* static int config_get(SSL* ssl, int socket, char* config_key, bool verbose, uint8_t compression, uint8_t encryption, int32_t output_format); */
+static int config_get(SSL* ssl, int socket, char* config_key, bool verbose, uint8_t compression, uint8_t encryption, int32_t output_format);
 /* static int config_ls(SSL* ssl, int socket, uint8_t compression, uint8_t encryption, int32_t output_format); */
 /* static int config_set(SSL* ssl, int socket, char* config_key, char* config_value, bool verbose, uint8_t compression, uint8_t encryption, int32_t output_format); */
 static int details(SSL* ssl, int socket, uint8_t compression, uint8_t encryption, int32_t output_format);
@@ -216,14 +216,14 @@ const struct pgagroal_command command_table[] = {
       .deprecated = false,
       .log_message = "<conf reload>"
    },
-   /* { */
-   /*    .command = "conf", */
-   /*    .subcommand = "get", */
-   /*    .accepted_argument_count = {1}, */
-   /*    .action = MANAGEMENT_CONFIG_GET, */
-   /*    .deprecated = false, */
-   /*    .log_message = "<conf get> [%s]" */
-   /* }, */
+   {
+      .command = "conf",
+      .subcommand = "get",
+      .accepted_argument_count = {1},
+      .action = MANAGEMENT_CONFIG_GET,
+      .deprecated = false,
+      .log_message = "<conf get> [%s]"
+   },
    /* { */
    /*    .command = "conf", */
    /*    .subcommand = "set", */
@@ -797,10 +797,10 @@ username:
          exit_code = reload(s_ssl, socket, compression, encryption, output_format);
       }
    }
-   /* else if (parsed.cmd->action == MANAGEMENT_CONFIG_GET) */
-   /* { */
-   /*    exit_code = config_get(s_ssl, socket, parsed.args[0], verbose, compression, encryption, output_format); */
-   /* } */
+   else if (parsed.cmd->action == MANAGEMENT_CONFIG_GET)
+   {
+      exit_code = config_get(s_ssl, socket, parsed.args[0], verbose, compression, encryption, output_format);
+   }
    /* else if (parsed.cmd->action == MANAGEMENT_CONFIG_SET) */
    /* { */
    /*    exit_code = config_set(s_ssl, socket, parsed.args[0], parsed.args[1], verbose, compression, encryption, output_format); */
@@ -928,7 +928,7 @@ display_helper(char* command)
    else if (//!strcmp(command, COMMAND_CONFIG_GET) ||
             //!strcmp(command, COMMAND_CONFIG_LS) ||
             //!strcmp(command, COMMAND_CONFIG_SET) ||
-            !strcmp(command, COMMAND_RELOAD))
+      !strcmp(command, COMMAND_RELOAD))
    {
       help_conf();
    }
@@ -1227,34 +1227,35 @@ reload(SSL* ssl, int socket, uint8_t compression, uint8_t encryption, int32_t ou
    return 0;
 
 error:
-
    return 1;
 }
 
-/* static int */
-/* config_get(SSL* ssl, int socket, char* config_key, bool verbose, uint8_t compression, uint8_t encryption, int32_t output_format) */
-/* { */
+static int
+config_get(SSL* ssl, int socket, char* config_key, bool verbose, uint8_t compression, uint8_t encryption, int32_t output_format)
+{
 
-/*    if (!config_key || strlen(config_key) > MISC_LENGTH) */
-/*    { */
-/*       goto error; */
-/*    } */
+   if (!config_key || strlen(config_key) > MISC_LENGTH)
+   {
+      goto error;
+   }
 
-/*    if (pgagroal_management_config_get(ssl, socket, config_key)) */
-/*    { */
-/*       goto error; */
-/*    } */
+   if (pgagroal_management_request_config_get(ssl, socket, config_key, compression, encryption, output_format))
+   {
+      pgagroal_log_debug("Error trying to get configuration key <%s>", config_key);
+      goto error;
+   }
 
-/*    if (pgagroal_management_read_config_get(socket, config_key, NULL, verbose, output_format)) */
-/*    { */
-/*       goto error; */
-/*    } */
+   if (process_result(ssl, socket, output_format))
+   {
+      pgagroal_log_debug("Error while processing result for conf_get with key <%s>", config_key);
+      goto error;
+   }
 
-/*    return 0; */
+   return 0;
 
-/* error: */
-/*    return 1; */
-/* } */
+error:
+   return 1;
+}
 
 /* static int */
 /* config_set(SSL* ssl, int socket, char* config_key, char* config_value, bool verbose, uint8_t compression, uint8_t encryption, int32_t output_format) */

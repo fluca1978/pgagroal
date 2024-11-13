@@ -1472,7 +1472,7 @@ accept_mgt_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
       struct json* res = NULL;
       struct json* databases = NULL;
       char* database = NULL;
-      
+
       pgagroal_log_debug("pgagroal: Management enabledb: ");
       pgagroal_pool_status();
 
@@ -1483,7 +1483,7 @@ accept_mgt_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
 
       pgagroal_management_create_response(payload, -1, &res);
       pgagroal_json_create(&databases);
-      
+
       if (!strcmp("*", database))
       {
          struct json* js = NULL;
@@ -1533,7 +1533,7 @@ accept_mgt_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
       struct json* res = NULL;
       struct json* databases = NULL;
       char* database = NULL;
-      
+
       pgagroal_log_debug("pgagroal: Management disabledb: ");
       pgagroal_pool_status();
 
@@ -1598,7 +1598,7 @@ accept_mgt_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
       start_time = time(NULL);
 
       config->gracefully = true;
-      
+
       end_time = time(NULL);
 
       pgagroal_management_response_ok(NULL, client_fd, start_time, end_time, compression, encryption, payload);
@@ -1659,7 +1659,6 @@ accept_mgt_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
       pgagroal_log_debug("pgagroal: Management details");
       pgagroal_pool_status();
 
-
       pid = fork();
       if (pid == -1)
       {
@@ -1700,7 +1699,7 @@ accept_mgt_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
       start_time = time(NULL);
 
       pgagroal_prometheus_clear();
-      
+
       end_time = time(NULL);
 
       pgagroal_management_response_ok(NULL, client_fd, start_time, end_time, compression, encryption, payload);
@@ -1711,7 +1710,7 @@ accept_mgt_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
       pgagroal_log_debug("pgagroal: Management clear server");
       char* server = NULL;
       struct json* req = NULL;
-      
+
       start_time = time(NULL);
 
       req = (struct json*)pgagroal_json_get(payload, MANAGEMENT_CATEGORY_REQUEST);
@@ -1719,7 +1718,7 @@ accept_mgt_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
 
       pgagroal_server_clear(server);
       pgagroal_prometheus_failed_servers();
-      
+
       end_time = time(NULL);
 
       pgagroal_management_response_ok(NULL, client_fd, start_time, end_time, compression, encryption, payload);
@@ -1731,7 +1730,7 @@ accept_mgt_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
       signed char server_state;
       char* server = NULL;
       struct json* req = NULL;
-      
+
       start_time = time(NULL);
 
       req = (struct json*)pgagroal_json_get(payload, MANAGEMENT_CATEGORY_REQUEST);
@@ -1776,7 +1775,7 @@ accept_mgt_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
       pgagroal_log_debug("pgagroal: Management reload");
 
       start_time = time(NULL);
-      
+
       restart = reload_configuration();
 
       pgagroal_management_create_response(payload, -1, &res);
@@ -1787,11 +1786,37 @@ accept_mgt_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
 
       pgagroal_management_response_ok(NULL, client_fd, start_time, end_time, compression, encryption, payload);
    }
-   /* else if (id == MANAGEMENT_CONFIG_GET) */
-   /* { */
-   /*    pgagroal_log_debug("pgagroal: Management config-get for key <%s>", payload_s); */
-   /*    pgagroal_management_write_config_get(client_fd, payload_s); */
-   /* } */
+   else if (id == MANAGEMENT_CONFIG_GET)
+   {
+      struct json* response = NULL;
+      struct json* request = NULL;
+      char config_value[ MISC_LENGTH ];
+      char* config_key;
+      int status;
+
+      pgagroal_log_debug("pgagroal: Management conf get");
+
+      start_time = time(NULL);
+
+      pgagroal_management_create_response(payload, -1, &response);
+
+      request = (struct json*)pgagroal_json_get(payload, MANAGEMENT_CATEGORY_REQUEST);
+      config_key = (char*)pgagroal_json_get(request, MANAGEMENT_ARGUMENT_CONFIGURATION_KEY);
+      status = pgagroal_write_config_value(config_value, config_key, MISC_LENGTH - 1);
+
+      pgagroal_json_put(response, config_key, (uintptr_t) config_value, ValueString);
+
+      end_time = time(NULL);
+
+      if (status)
+      {
+         pgagroal_management_response_error(NULL, client_fd, NULL, status, compression, encryption, payload);
+      }
+      else
+      {
+         pgagroal_management_response_ok(NULL, client_fd, start_time, end_time, compression, encryption, payload);
+      }
+   }
    /* else if (id == MANAGEMENT_CONFIG_SET) */
    /* { */
    /*    // this command has a secondary payload to extract, that is the configuration value */
@@ -1810,9 +1835,9 @@ accept_mgt_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
       char* username = NULL;
       struct json* req = NULL;
       struct json* res = NULL;
-      
+
       start_time = time(NULL);
-      
+
       req = (struct json*)pgagroal_json_get(payload, MANAGEMENT_CATEGORY_REQUEST);
       username = (char*)pgagroal_json_get(req, MANAGEMENT_ARGUMENT_USERNAME);
 
@@ -1823,9 +1848,9 @@ accept_mgt_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
             index = i;
          }
       }
-      
+
       pgagroal_management_create_response(payload, -1, &res);
-      
+
       pgagroal_json_put(res, MANAGEMENT_ARGUMENT_USERNAME, (uintptr_t)username, ValueString);
 
       if (index != -1)
@@ -1972,7 +1997,7 @@ accept_transfer_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
             }
 
             pgagroal_disconnect(c_fd);
-            
+
             c = c->next;
          }
       }
@@ -2025,7 +2050,7 @@ accept_transfer_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
             }
 
             pgagroal_disconnect(c_fd);
-            
+
             c = c->next;
          }
 
@@ -2055,7 +2080,7 @@ accept_transfer_cb(struct ev_loop* loop, struct ev_io* watcher, int revents)
    pgagroal_prometheus_self_sockets_sub();
 
    return;
-   
+
 error:
 
    pgagroal_disconnect(client_fd);
@@ -2583,11 +2608,11 @@ reload_configuration(void)
       remove_pidfile();
    }
 
-   exit(0);
+   return true;
 
 error:
    remove_pidfile();
-   exit(1);
+   return false;
 }
 
 /**

@@ -67,7 +67,7 @@ extern "C" {
  * Management commands
  */
 #define MANAGEMENT_CANCEL_SHUTDOWN     1
-/* #define MANAGEMENT_CONFIG_GET          2 */
+#define MANAGEMENT_CONFIG_GET          2
 /* #define MANAGEMENT_CONFIG_LS           3 */
 /* #define MANAGEMENT_CONFIG_SET          4 */
 #define MANAGEMENT_DETAILS             5
@@ -122,6 +122,7 @@ extern "C" {
 #define MANAGEMENT_ARGUMENT_TIMESTAMP             "Timestamp"
 #define MANAGEMENT_ARGUMENT_TOTAL_CONNECTIONS     "TotalConnections"
 #define MANAGEMENT_ARGUMENT_USERNAME              "Username"
+#define MANAGEMENT_ARGUMENT_CONFIGURATION_KEY     "ConfigurationKey"
 
 /**
  * Management error
@@ -438,6 +439,21 @@ pgagroal_management_read_json(SSL* ssl, int socket, uint8_t* compression, uint8_
  */
 int
 pgagroal_management_write_json(SSL* ssl, int socket, uint8_t compression, uint8_t encryption, struct json* json);
+
+/**
+ * Prepares and sends the request to get the configuration key specified.
+ *
+ * @param ssl the SSL connection
+ * @param socket the socket descriptor
+ * @param config_key the configuration key to be extracted from the configuration
+ * @param compression the compression method to use within the protocol
+ * @param encryption the encryption method to use within the protocol
+ * @param output_format the requested output format
+ *
+ * @returns 0 on success
+ */
+int
+pgagroal_management_request_config_get(SSL* ssl, int socket, char* config_key, uint8_t compression, uint8_t encryption, int32_t output_format);
 
 #ifdef __cplusplus
 }
