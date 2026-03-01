@@ -55,6 +55,7 @@ pgagroal_encrypt(char* plaintext, char* password, char** ciphertext, int* cipher
    char* encrypted = NULL;
    int encrypted_length = 0;
    char* output = NULL;
+   int ret = 1;
 
    memset(&key, 0, sizeof(key));
    memset(&iv, 0, sizeof(iv));
@@ -62,40 +63,41 @@ pgagroal_encrypt(char* plaintext, char* password, char** ciphertext, int* cipher
    /* Generate a cryptographically random salt */
    if (RAND_bytes(salt, PBKDF2_SALT_LENGTH) != 1)
    {
-      return 1;
+      goto cleanup;
    }
 
    if (derive_key_iv(password, salt, key, iv, mode) != 0)
    {
-      return 1;
+      goto cleanup;
    }
 
    if (aes_encrypt(plaintext, key, iv, &encrypted, &encrypted_length, mode) != 0)
    {
-      return 1;
+      goto cleanup;
    }
 
    /* Prepend salt to ciphertext: [salt][encrypted] */
    output = malloc(PBKDF2_SALT_LENGTH + encrypted_length);
    if (output == NULL)
    {
-      free(encrypted);
-      return 1;
+      goto cleanup;
    }
 
    memcpy(output, salt, PBKDF2_SALT_LENGTH);
    memcpy(output + PBKDF2_SALT_LENGTH, encrypted, encrypted_length);
 
-   free(encrypted);
-
    *ciphertext = output;
    *ciphertext_length = PBKDF2_SALT_LENGTH + encrypted_length;
+   ret = 0;
+
+cleanup:
+   free(encrypted);
 
    /* Wipe key material from stack */
    OPENSSL_cleanse(key, sizeof(key));
    OPENSSL_cleanse(iv, sizeof(iv));
 
-   return 0;
+   return ret;
 }
 
 int
@@ -223,6 +225,10 @@ error:
       EVP_CIPHER_CTX_free(ctx);
    }
 
+   /* Wipe key material from stack */
+   OPENSSL_cleanse(key, sizeof(key));
+   OPENSSL_cleanse(iv, sizeof(iv));
+
    free(ct);
 
    return 1;
@@ -287,6 +293,10 @@ error:
    {
       EVP_CIPHER_CTX_free(ctx);
    }
+
+   /* Wipe key material from stack */
+   OPENSSL_cleanse(key, sizeof(key));
+   OPENSSL_cleanse(iv, sizeof(iv));
 
    free(pt);
 
@@ -369,6 +379,9 @@ encrypt_decrypt_buffer(unsigned char* origin_buffer, size_t origin_size, unsigne
    size_t f_len = 0;
    unsigned char* actual_input = NULL;
    size_t actual_input_size = 0;
+   unsigned char* out_buf = NULL;
+
+   *res_buffer = NULL;
 
    cipher_fp = get_cipher(mode);
    if (cipher_fp == NULL)
@@ -405,15 +418,15 @@ encrypt_decrypt_buffer(unsigned char* origin_buffer, size_t origin_size, unsigne
 
       /* Output buffer: salt + encrypted data + padding */
       outbuf_size = PBKDF2_SALT_LENGTH + origin_size + cipher_block_size;
-      *res_buffer = (unsigned char*)malloc(outbuf_size + 1);
-      if (*res_buffer == NULL)
+      out_buf = (unsigned char*)malloc(outbuf_size + 1);
+      if (out_buf == NULL)
       {
          pgagroal_log_error("pgagroal_encrypt_decrypt_buffer: Allocation failure");
          goto error;
       }
 
       /* Prepend salt */
-      memcpy(*res_buffer, salt, PBKDF2_SALT_LENGTH);
+      memcpy(out_buf, salt, PBKDF2_SALT_LENGTH);
 
       if (!(ctx = EVP_CIPHER_CTX_new()))
       {
@@ -427,7 +440,7 @@ encrypt_decrypt_buffer(unsigned char* origin_buffer, size_t origin_size, unsigne
          goto error;
       }
 
-      if (EVP_CipherUpdate(ctx, *res_buffer + PBKDF2_SALT_LENGTH, (int*)&outl, origin_buffer, origin_size) == 0)
+      if (EVP_CipherUpdate(ctx, out_buf + PBKDF2_SALT_LENGTH, (int*)&outl, origin_buffer, origin_size) == 0)
       {
          pgagroal_log_error("EVP_CipherUpdate: Failed to process data");
          goto error;
@@ -435,7 +448,7 @@ encrypt_decrypt_buffer(unsigned char* origin_buffer, size_t origin_size, unsigne
 
       *res_size = PBKDF2_SALT_LENGTH + outl;
 
-      if (EVP_CipherFinal_ex(ctx, *res_buffer + PBKDF2_SALT_LENGTH + outl, (int*)&f_len) == 0)
+      if (EVP_CipherFinal_ex(ctx, out_buf + PBKDF2_SALT_LENGTH + outl, (int*)&f_len) == 0)
       {
          pgagroal_log_error("EVP_CipherFinal_ex: Failed to finalize operation");
          goto error;
@@ -463,8 +476,8 @@ encrypt_decrypt_buffer(unsigned char* origin_buffer, size_t origin_size, unsigne
       }
 
       outbuf_size = actual_input_size;
-      *res_buffer = (unsigned char*)malloc(outbuf_size + 1);
-      if (*res_buffer == NULL)
+      out_buf = (unsigned char*)malloc(outbuf_size + 1);
+      if (out_buf == NULL)
       {
          pgagroal_log_error("pgagroal_encrypt_decrypt_buffer: Allocation failure");
          goto error;
@@ -482,7 +495,7 @@ encrypt_decrypt_buffer(unsigned char* origin_buffer, size_t origin_size, unsigne
          goto error;
       }
 
-      if (EVP_CipherUpdate(ctx, *res_buffer, (int*)&outl, actual_input, actual_input_size) == 0)
+      if (EVP_CipherUpdate(ctx, out_buf, (int*)&outl, actual_input, actual_input_size) == 0)
       {
          pgagroal_log_error("EVP_CipherUpdate: Failed to process data");
          goto error;
@@ -490,14 +503,14 @@ encrypt_decrypt_buffer(unsigned char* origin_buffer, size_t origin_size, unsigne
 
       *res_size = outl;
 
-      if (EVP_CipherFinal_ex(ctx, *res_buffer + outl, (int*)&f_len) == 0)
+      if (EVP_CipherFinal_ex(ctx, out_buf + outl, (int*)&f_len) == 0)
       {
          pgagroal_log_error("EVP_CipherFinal_ex: Failed to finalize operation");
          goto error;
       }
 
       *res_size += f_len;
-      (*res_buffer)[*res_size] = '\0';
+      out_buf[*res_size] = '\0';
    }
 
    /* Wipe key material from stack */
@@ -505,7 +518,14 @@ encrypt_decrypt_buffer(unsigned char* origin_buffer, size_t origin_size, unsigne
    OPENSSL_cleanse(iv, sizeof(iv));
 
    EVP_CIPHER_CTX_free(ctx);
-   free(master_key);
+
+   if (master_key != NULL)
+   {
+      OPENSSL_cleanse(master_key, strlen(master_key));
+      free(master_key);
+   }
+
+   *res_buffer = out_buf;
 
    return 0;
 
@@ -515,10 +535,17 @@ error:
       EVP_CIPHER_CTX_free(ctx);
    }
 
-   free(master_key);
+   /* Wipe key material from stack */
+   OPENSSL_cleanse(key, sizeof(key));
+   OPENSSL_cleanse(iv, sizeof(iv));
 
-   free(*res_buffer);
-   *res_buffer = NULL;
+   if (master_key != NULL)
+   {
+      OPENSSL_cleanse(master_key, strlen(master_key));
+      free(master_key);
+   }
+
+   free(out_buf);
 
    return 1;
 }
