@@ -2461,6 +2461,16 @@ extract_key_value(char* str, char** key, char** value)
    char quoting_begin = '\0';
    char quoting_end = '\0';
 
+   // if the key starts with spaces, skip them
+   if (c == 0)
+   {
+      while (str[c] == ' ')
+         c++;
+   }
+
+   // store where the key starts
+   offset = c;
+
    // the key does not allow spaces and is whatever is
    // on the left of the '='
    while (str[c] != ' ' && str[c] != '=' && c < length)
@@ -2470,12 +2480,12 @@ extract_key_value(char* str, char** key, char** value)
 
    if (c < length)
    {
-      k = calloc(1, c + 1);
+      k = calloc(1, c - offset + 1);
       if (k == NULL)
       {
          goto error;
       }
-      memcpy(k, str, c);
+      memcpy(k, &str[offset], c - offset);
       *key = k;
 
       while ((str[c] == ' ' || str[c] == '\t' || str[c] == '=') && c < length)
