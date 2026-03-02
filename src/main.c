@@ -759,7 +759,9 @@ read_frontend_users_path:
       else if (ret == PGAGROAL_CONFIGURATION_STATUS_CANNOT_DECRYPT || ret == PGAGROAL_CONFIGURATION_STATUS_KO)
       {
 #ifdef HAVE_SYSTEMD
-         sd_notifyf(0, "STATUS=Invalid master key file: <%s>", frontend_users_path);
+         memset(message, 0, MISC_LENGTH);
+         snprintf(message, MISC_LENGTH, "FRONTEND USERS Invalid master key file");
+         sd_notifyf(0, "STATUS=%s: <%s>", message, frontend_users_path);
 #endif
          errx(1, "%s (file <%s>)", message, frontend_users_path);
       }
