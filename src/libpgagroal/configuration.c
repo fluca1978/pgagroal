@@ -150,6 +150,7 @@ pgagroal_init_configuration(void* shm)
    }
 
    config->failover = false;
+   memset(config->failover_notify_script, 0, MISC_LENGTH);
    config->common.tls = false;
    config->gracefully = false;
    config->keep_running = true;
@@ -592,6 +593,47 @@ pgagroal_validate_configuration(void* shm, bool has_unix_socket, bool has_main_s
       if (config->number_of_servers <= 1)
       {
          pgagroal_log_fatal("pgagroal: Failover requires at least 2 servers defined");
+         return 1;
+      }
+   }
+
+   if (strlen(config->failover_notify_script) > 0)
+   {
+      if (strlen(config->failover_script) == 0)
+      {
+         pgagroal_log_fatal("pgagroal: failover_notify_script requires failover_script to be configured");
+         return 1;
+      }
+
+      if (strcmp(config->failover_script, config->failover_notify_script) == 0)
+      {
+         pgagroal_log_fatal("pgagroal: failover_notify_script cannot be the same as failover_script");
+         return 1;
+      }
+
+      memset(&st, 0, sizeof(struct stat));
+
+      if (stat(config->failover_notify_script, &st) == -1)
+      {
+         pgagroal_log_error("pgagroal: Can't locate failover notify script: %s", config->failover_notify_script);
+         return 1;
+      }
+
+      if (!S_ISREG(st.st_mode))
+      {
+         pgagroal_log_error("pgagroal: Failover notify script is not a regular file: %s", config->failover_notify_script);
+         return 1;
+      }
+
+      if (st.st_uid != geteuid())
+      {
+         pgagroal_log_error("pgagroal: Failover notify script not owned by user: %s", config->failover_notify_script);
+         return 1;
+      }
+
+      if (!(st.st_mode & (S_IRUSR | S_IXUSR)))
+      {
+         pgagroal_log_error("pgagroal: Failover notify script must be executable: %s", config->failover_notify_script);
          return 1;
       }
    }
@@ -3482,6 +3524,7 @@ transfer_configuration(struct main_configuration* config, struct main_configurat
 
    config->failover = reload->failover;
    memcpy(config->failover_script, reload->failover_script, MISC_LENGTH);
+   memcpy(config->failover_notify_script, reload->failover_notify_script, MISC_LENGTH);
 
    /* log_type */
    if (restart_int("log_type", config->common.log_type, reload->common.log_type))
@@ -4678,6 +4721,10 @@ pgagroal_write_config_value(char* buffer, char* config_key, size_t buffer_size)
       {
          return to_string(buffer, config->failover_script, buffer_size);
       }
+      else if (!strncmp(key, "failover_notify_script", MISC_LENGTH))
+      {
+         return to_string(buffer, config->failover_notify_script, buffer_size);
+      }
       else if (!strncmp(key, "tls", MISC_LENGTH))
       {
          return to_bool(buffer, config->common.tls);
@@ -5571,6 +5618,18 @@ pgagroal_apply_main_configuration(struct main_configuration* config,
          max = MISC_LENGTH - 1;
       }
       memcpy(config->failover_script, value, max);
+   }
+   else if (key_in_section("failover_notify_script", section, key, true, &unknown))
+   {
+      max = strlen(value);
+      if (max > MISC_LENGTH - 1)
+      {
+         fprintf(stderr, "Error: failover_notify_script path too long\n");
+      }
+      else
+      {
+         memcpy(config->failover_notify_script, value, max);
+      }
    }
    else if (key_in_section("auth_query", section, key, true, &unknown))
    {
@@ -6472,6 +6531,7 @@ add_configuration_response(struct json* res)
    pgagroal_json_put(res, CONFIGURATION_ARGUMENT_AUTH_QUERY, (uintptr_t)config->authquery, ValueBool);
    pgagroal_json_put(res, CONFIGURATION_ARGUMENT_FAILOVER, (uintptr_t)config->failover, ValueBool);
    pgagroal_json_put(res, CONFIGURATION_ARGUMENT_FAILOVER_SCRIPT, (uintptr_t)config->failover_script, ValueString);
+   pgagroal_json_put(res, CONFIGURATION_ARGUMENT_FAILOVER_NOTIFY_SCRIPT, (uintptr_t)config->failover_notify_script, ValueString);
    pgagroal_json_put(res, CONFIGURATION_ARGUMENT_TLS, (uintptr_t)config->common.tls, ValueBool);
    pgagroal_json_put(res, CONFIGURATION_ARGUMENT_TLS_CERT_FILE, (uintptr_t)config->common.tls_cert_file, ValueString);
    pgagroal_json_put(res, CONFIGURATION_ARGUMENT_TLS_KEY_FILE, (uintptr_t)config->common.tls_key_file, ValueString);

@@ -108,6 +108,7 @@ extern "C" {
 #define CONFIGURATION_ARGUMENT_AUTH_QUERY                       "auth_query"
 #define CONFIGURATION_ARGUMENT_FAILOVER                         "failover"
 #define CONFIGURATION_ARGUMENT_FAILOVER_SCRIPT                  "failover_script"
+#define CONFIGURATION_ARGUMENT_FAILOVER_NOTIFY_SCRIPT           "failover_notify_script"
 #define CONFIGURATION_ARGUMENT_TLS                              "tls"
 #define CONFIGURATION_ARGUMENT_TLS_CERT_FILE                    "tls_cert_file"
 #define CONFIGURATION_ARGUMENT_TLS_KEY_FILE                     "tls_key_file"
