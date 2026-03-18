@@ -1044,47 +1044,39 @@ pgagroal_management_read_json(SSL* ssl, int socket, uint8_t* compression, uint8_
       transfer_size = decoded_size;
       decoded_buffer = NULL;
 
-      // Second, perform dencrypt
+      // Second, perform decrypt
+      int mode = 0;
       switch (encrypt_method)
       {
-         case MANAGEMENT_ENCRYPTION_AES256:
-            if (pgagroal_decrypt_buffer(transfer_buffer, transfer_size, &decrypted_buffer, &decrypted_size, MANAGEMENT_ENCRYPTION_AES256))
-            {
-               pgagroal_log_error("pgagroal_management_read_json: Failed to aes256 dencrypt the string");
-               goto error;
-            }
-            free(transfer_buffer);
-            transfer_buffer = decrypted_buffer;
-            transfer_size = decrypted_size;
-            decrypted_buffer = NULL;
-
+         case MANAGEMENT_ENCRYPTION_AES256_GCM:
+            mode = ENCRYPTION_AES_256_GCM;
             break;
-         case MANAGEMENT_ENCRYPTION_AES192:
-            if (pgagroal_decrypt_buffer(transfer_buffer, transfer_size, &decrypted_buffer, &decrypted_size, MANAGEMENT_ENCRYPTION_AES192))
-            {
-               pgagroal_log_error("pgagroal_management_read_json: Failed to aes192 dencrypt the string");
-               goto error;
-            }
-            free(transfer_buffer);
-            transfer_buffer = decrypted_buffer;
-            transfer_size = decrypted_size;
-            decrypted_buffer = NULL;
-
+         case MANAGEMENT_ENCRYPTION_AES192_GCM:
+            mode = ENCRYPTION_AES_192_GCM;
             break;
-         case MANAGEMENT_ENCRYPTION_AES128:
-            if (pgagroal_decrypt_buffer(transfer_buffer, transfer_size, &decrypted_buffer, &decrypted_size, MANAGEMENT_ENCRYPTION_AES128))
-            {
-               pgagroal_log_error("pgagroal_management_read_json: Failed to aes128 dencrypt the string");
-               goto error;
-            }
-            free(transfer_buffer);
-            transfer_buffer = decrypted_buffer;
-            transfer_size = decrypted_size;
-            decrypted_buffer = NULL;
-
+         case MANAGEMENT_ENCRYPTION_AES128_GCM:
+            mode = ENCRYPTION_AES_128_GCM;
             break;
          default:
+            if (encrypt_method != MANAGEMENT_ENCRYPTION_NONE)
+            {
+               pgagroal_log_error("pgagroal_management_read_json: Unsupported management encryption code %d", encrypt_method);
+               goto error;
+            }
             break;
+      }
+
+      if (mode != 0)
+      {
+         if (pgagroal_decrypt_buffer(transfer_buffer, transfer_size, &decrypted_buffer, &decrypted_size, mode))
+         {
+            pgagroal_log_error("pgagroal_management_read_json: Decryption failed (encrypt_method=%d, mode=%d)", encrypt_method, mode);
+            goto error;
+         }
+         free(transfer_buffer);
+         transfer_buffer = decrypted_buffer;
+         transfer_size = decrypted_size;
+         decrypted_buffer = NULL;
       }
 
       // Third, perform decompress
@@ -1271,46 +1263,38 @@ pgagroal_management_write_json(SSL* ssl, int socket, uint8_t compression, uint8_
       }
 
       // Second, perform encrypt
+      int mode = 0;
       switch (encryption)
       {
-         case MANAGEMENT_ENCRYPTION_AES256:
-            if (pgagroal_encrypt_buffer(transfer_buffer, transfer_size, &encrypted_buffer, &encrypted_size, MANAGEMENT_ENCRYPTION_AES256))
-            {
-               pgagroal_log_error("pgagroal_management_write_json: Failed to aes256 encrypt the string");
-               goto error;
-            }
-            free(transfer_buffer);
-            transfer_buffer = encrypted_buffer;
-            transfer_size = encrypted_size;
-            encrypted_buffer = NULL;
-
+         case MANAGEMENT_ENCRYPTION_AES256_GCM:
+            mode = ENCRYPTION_AES_256_GCM;
             break;
-         case MANAGEMENT_ENCRYPTION_AES192:
-            if (pgagroal_encrypt_buffer(transfer_buffer, transfer_size, &encrypted_buffer, &encrypted_size, MANAGEMENT_ENCRYPTION_AES192))
-            {
-               pgagroal_log_error("pgagroal_management_write_json: Failed to aes192 encrypt the string");
-               goto error;
-            }
-            free(transfer_buffer);
-            transfer_buffer = encrypted_buffer;
-            transfer_size = encrypted_size;
-            encrypted_buffer = NULL;
-
+         case MANAGEMENT_ENCRYPTION_AES192_GCM:
+            mode = ENCRYPTION_AES_192_GCM;
             break;
-         case MANAGEMENT_ENCRYPTION_AES128:
-            if (pgagroal_encrypt_buffer(transfer_buffer, transfer_size, &encrypted_buffer, &encrypted_size, MANAGEMENT_ENCRYPTION_AES128))
-            {
-               pgagroal_log_error("pgagroal_management_write_json: Failed to aes128 encrypt the string");
-               goto error;
-            }
-            free(transfer_buffer);
-            transfer_buffer = encrypted_buffer;
-            transfer_size = encrypted_size;
-            encrypted_buffer = NULL;
-
+         case MANAGEMENT_ENCRYPTION_AES128_GCM:
+            mode = ENCRYPTION_AES_128_GCM;
             break;
          default:
+            if (encryption != MANAGEMENT_ENCRYPTION_NONE)
+            {
+               pgagroal_log_error("pgagroal_management_write_json: Unsupported management encryption code %d", encryption);
+               goto error;
+            }
             break;
+      }
+
+      if (mode != 0)
+      {
+         if (pgagroal_encrypt_buffer(transfer_buffer, transfer_size, &encrypted_buffer, &encrypted_size, mode))
+         {
+            pgagroal_log_error("pgagroal_management_write_json: Encryption failed (encryption=%d, mode=%d)", encryption, mode);
+            goto error;
+         }
+         free(transfer_buffer);
+         transfer_buffer = encrypted_buffer;
+         transfer_size = encrypted_size;
+         encrypted_buffer = NULL;
       }
 
       // Third, perform base64 encode

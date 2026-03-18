@@ -29,6 +29,11 @@
 #ifndef PGAGROAL_AES_H
 #define PGAGROAL_AES_H
 
+#define PBKDF2_ITERATIONS  600000
+#define PBKDF2_SALT_LENGTH 16
+#define PBKDF2_IV_LENGTH   12
+#define GCM_TAG_LENGTH     16
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -45,6 +50,7 @@ extern "C" {
  * @param ciphertext The ciphertext output
  * @param ciphertext_length The length of the ciphertext
  * @return 0 upon success, otherwise 1
+ * @note Requires pgagroal_get_master_key() or pgagroal_set_master_salt() to be called first.
  */
 int
 pgagroal_encrypt(char* plaintext, char* password, char** ciphertext, int* ciphertext_length, int mode);
@@ -56,6 +62,7 @@ pgagroal_encrypt(char* plaintext, char* password, char** ciphertext, int* cipher
  * @param password The master password
  * @param plaintext The plaintext output
  * @return 0 upon success, otherwise 1
+ * @note Requires pgagroal_get_master_key() or pgagroal_set_master_salt() to be called first.
  */
 int
 pgagroal_decrypt(char* ciphertext, int ciphertext_length, char* password, char** plaintext, int mode);
@@ -85,6 +92,19 @@ pgagroal_encrypt_buffer(unsigned char* origin_buffer, size_t origin_size, unsign
  */
 int
 pgagroal_decrypt_buffer(unsigned char* origin_buffer, size_t origin_size, unsigned char** dec_buffer, size_t* dec_size, int mode);
+
+/**
+ * Clear the thread-local AES cache securely
+ */
+void
+pgagroal_clear_aes_cache(void);
+
+/**
+ * Set the master salt for the high-iteration KDF
+ * @param salt The 16-byte salt
+ */
+void
+pgagroal_set_master_salt(unsigned char* salt);
 
 #ifdef __cplusplus
 }

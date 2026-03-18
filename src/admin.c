@@ -48,6 +48,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <openssl/rand.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -311,12 +312,18 @@ master_key(char* password, bool generate_pwd, int pwd_length, int32_t output_for
    char buf[MISC_LENGTH];
    char* encoded = NULL;
    size_t encoded_length;
+   char* encoded_salt = NULL;
+   size_t encoded_salt_length = 0;
    struct stat st = {0};
    bool do_free = true;
    struct json* j = NULL;
    struct json* outcome = NULL;
    time_t start_t;
    time_t end_t;
+   char temp_path[MAX_PATH];
+   bool using_temp = false;
+   unsigned char master_salt[PBKDF2_SALT_LENGTH];
+   bool master_salt_initialized = false;
 
    start_t = time(NULL);
 
@@ -347,7 +354,7 @@ master_key(char* password, bool generate_pwd, int pwd_length, int32_t output_for
    }
 
    memset(&buf, 0, sizeof(buf));
-   snprintf(&buf[0], sizeof(buf), "%s/.pgagroal", pgagroal_get_home_directory());
+   pgagroal_snprintf(&buf[0], sizeof(buf), "%s/.pgagroal", pgagroal_get_home_directory());
 
    if (stat(&buf[0], &st) == -1)
    {
@@ -367,7 +374,7 @@ master_key(char* password, bool generate_pwd, int pwd_length, int32_t output_for
    }
 
    memset(&buf, 0, sizeof(buf));
-   snprintf(&buf[0], sizeof(buf), "%s/.pgagroal/master.key", pgagroal_get_home_directory());
+   pgagroal_snprintf(&buf[0], sizeof(buf), "%s/.pgagroal/master.key", pgagroal_get_home_directory());
 
    if (pgagroal_exists(&buf[0]))
    {
@@ -392,10 +399,21 @@ master_key(char* password, bool generate_pwd, int pwd_length, int32_t output_for
       }
    }
 
-   file = fopen(&buf[0], "w+");
+   memset(temp_path, 0, sizeof(temp_path));
+   pgagroal_snprintf(temp_path, sizeof(temp_path), "%s.XXXXXX", &buf[0]);
+   int fd = mkstemp(temp_path);
+   if (fd == -1)
+   {
+      warnx("Could not create temp master key file <%s>", temp_path);
+      goto error;
+   }
+   using_temp = true;
+
+   file = fdopen(fd, "w");
    if (file == NULL)
    {
-      warnx("Could not write to master key file <%s>", &buf[0]);
+      warnx("Could not open temp master key file <%s>", temp_path);
+      close(fd);
       goto error;
    }
 
@@ -474,6 +492,48 @@ master_key(char* password, bool generate_pwd, int pwd_length, int32_t output_for
       do_free = false;
    }
 
+   if (pgagroal_base64_encode(password, strlen(password), &encoded, &encoded_length))
+   {
+      goto error;
+   }
+   fputs(encoded, file);
+   free(encoded);
+   encoded = NULL;
+
+   if (RAND_bytes(master_salt, PBKDF2_SALT_LENGTH) != 1)
+   {
+      goto error;
+   }
+   master_salt_initialized = true;
+
+   if (pgagroal_base64_encode((char*)master_salt, PBKDF2_SALT_LENGTH, &encoded_salt, &encoded_salt_length))
+   {
+      goto error;
+   }
+   fputs("\n", file);
+   fputs(encoded_salt, file);
+   free(encoded_salt);
+   encoded_salt = NULL;
+
+   pgagroal_cleanse(master_salt, sizeof(master_salt));
+
+   if (do_free)
+   {
+      free(password);
+   }
+
+   fclose(file);
+   file = NULL;
+
+   if (rename(temp_path, &buf[0]) != 0)
+   {
+      warnx("Could not securely rename master key file from '%s' to '%s': %s", temp_path, &buf[0], strerror(errno));
+      goto error;
+   }
+   using_temp = false;
+
+   chmod(&buf[0], S_IRUSR | S_IWUSR);
+
    end_t = time(NULL);
 
    if (pgagroal_management_create_outcome_success(j, start_t, end_t, &outcome))
@@ -490,26 +550,22 @@ master_key(char* password, bool generate_pwd, int pwd_length, int32_t output_for
       pgagroal_json_print(j, FORMAT_TEXT);
    }
 
-   pgagroal_base64_encode(password, strlen(password), &encoded, &encoded_length);
-   fputs(encoded, file);
-   free(encoded);
-
    pgagroal_json_destroy(j);
 
-   if (do_free)
-   {
-      free(password);
-   }
-
-   fclose(file);
-   file = NULL;
-
-   chmod(&buf[0], S_IRUSR | S_IWUSR);
    printf("Master Key stored into %s\n", &buf[0]);
    return 0;
 
 error:
-
+   if (using_temp && temp_path[0] != '\0')
+   {
+      unlink(temp_path);
+      using_temp = false;
+   }
+   if (master_salt_initialized)
+   {
+      pgagroal_cleanse(master_salt, sizeof(master_salt));
+   }
+   free(encoded_salt);
    free(encoded);
 
    if (do_free)
@@ -766,8 +822,14 @@ password:
       }
    }
 
-   pgagroal_encrypt(password, master_key, &encrypted, &encrypted_length, ENCRYPTION_AES_256_CBC);
-   pgagroal_base64_encode(encrypted, encrypted_length, &encoded, &encoded_length);
+   if (pgagroal_encrypt(password, master_key, &encrypted, &encrypted_length, ENCRYPTION_AES_256_GCM))
+   {
+      goto error;
+   }
+   if (pgagroal_base64_encode(encrypted, encrypted_length, &encoded, &encoded_length))
+   {
+      goto error;
+   }
 
    entry = pgagroal_append(entry, username);
    entry = pgagroal_append(entry, ":");
@@ -902,7 +964,7 @@ update_user(char* users_path, char* username, char* password, bool generate_pwd,
       goto error;
    }
 
-   snprintf(tmpfilename, sizeof(tmpfilename), "%s.tmp", users_path);
+   pgagroal_snprintf(tmpfilename, sizeof(tmpfilename), "%s.tmp", users_path);
    users_file_tmp = fopen(tmpfilename, "w+");
    if (users_file_tmp == NULL)
    {
@@ -1072,8 +1134,14 @@ password:
             }
          }
 
-         pgagroal_encrypt(password, master_key, &encrypted, &encrypted_length, ENCRYPTION_AES_256_CBC);
-         pgagroal_base64_encode(encrypted, encrypted_length, &encoded, &encoded_length);
+         if (pgagroal_encrypt(password, master_key, &encrypted, &encrypted_length, ENCRYPTION_AES_256_GCM))
+         {
+            goto error;
+         }
+         if (pgagroal_base64_encode(encrypted, encrypted_length, &encoded, &encoded_length))
+         {
+            goto error;
+         }
 
          entry = NULL;
          entry = pgagroal_append(entry, username);
@@ -1215,7 +1283,7 @@ remove_user(char* users_path, char* username, int32_t output_format)
    }
 
    memset(&tmpfilename, 0, sizeof(tmpfilename));
-   snprintf(tmpfilename, sizeof(tmpfilename), "%s.tmp", users_path);
+   pgagroal_snprintf(tmpfilename, sizeof(tmpfilename), "%s.tmp", users_path);
    users_file_tmp = fopen(tmpfilename, "w+");
    if (users_file_tmp == NULL)
    {

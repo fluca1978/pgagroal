@@ -6,6 +6,33 @@ This chapter provides comprehensive security guidance for [**pgagroal**][pgagroa
 
 ## Security Models
 
+AES-GCM (Galois/Counter Mode) is the recommended encryption mode in `pgagroal`. It provides both confidentiality (encryption) and integrity/authenticity (verification), ensuring that encrypted data has not been tampered with. Legacy modes (AES-CBC and AES-CTR) have been removed to ensure the highest security standards and to leverage modern CPU optimizations.
+
+### Why AES-GCM?
+
+GCM is an Authenticated Encryption with Associated Data (AEAD) mode. Unlike CBC or CTR, which only provide confidentiality, GCM includes a built-in authentication tag. This protects against:
+* **Integrity Protection**: GCM ensures that any unauthorized modification to the ciphertext is detected immediately during the decryption process, preventing the system from processing tampered vault entries.
+* **Performance**: GCM is highly parallelizable and leverages **AES-NI** instructions on modern CPUs for incredible speeds (up to 6GB/s per core).
+
+### Performance Benchmarks
+
+You can verify your system's encryption performance using OpenSSL speed tests:
+
+```sh
+# Verify AES-NI support
+cat /proc/cpuinfo | grep aes
+
+# Test single-core performance
+openssl speed -elapsed -evp aes-256-gcm
+
+# Test multi-core performance (e.g., 8 cores)
+openssl speed -multi 8 -elapsed -evp aes-256-gcm
+```
+
+Modern high-performance systems typically see throughput exceed **5GB/s** per core for AES-256-GCM. In `pgagroal`, the most significant performance gain comes from the **two-step key derivation**, which reduces the per-entry PBKDF2 overhead by **600,000x** (from 600,000 iterations to 1, once the master key is derived and cached). This ensures that even with hundreds of vault entries, operations remain instantaneous.
+
+### Key Derivation and Caching
+
 [**pgagroal**][pgagroal] supports multiple security models to meet different deployment requirements.
 
 ### Pass-through Security
@@ -22,6 +49,18 @@ methods, so `scram-sha-256` based connections are not cached.
 - This can lead to replay attacks against `md5` based connections since the hash doesn't change
 - Make sure that [**pgagroal**][pgagroal] is deployed on a private trusted network
 - Consider using either a user vault or authentication query instead
+
+### Management protocol encryption
+
+The management wire protocol has been updated in 2.1.0 to exclusively use authenticated encryption (GCM). Legacy CBC and CTR modes are no longer supported.
+
+While this does not affect on-disk data, it is a **breaking change for mixed-version deployments**:
+- A 2.0.x `pgagroal-cli` or `pgagroal-vault` cannot communicate with a 2.1.0 server.
+- A 2.1.0 `pgagroal-cli` or `pgagroal-vault` cannot interoperate with a 2.0.x server.
+
+**Action required:**
+- Upgrade the `pgagroal` server and all `pgagroal-cli`/`pgagroal-vault` tools to 2.1.0 at the same time.
+- After upgrading, restart the server and any long-running management clients to ensure they are all using the updated authenticated protocol.
 
 ### User Vault
 
@@ -43,9 +82,20 @@ Frontend users (`-F`) requires a user vault (`-u`) to be defined.
 
 #### Vault Encryption
 
-pgagroal uses AES-256-CBC encryption for storing user credentials in vault files. Key derivation uses PKCS5_PBKDF2_HMAC with a SHA-256 hash, a cryptographically random 16-byte salt, and a high iteration count to protect against brute-force attacks.
+pgagroal uses **AES-256-GCM** encryption for storing user credentials in vault files. This provides authenticated encryption, ensuring both confidentiality and integrity for all sensitive data.
 
-Note that AES-256-CBC does not provide built-in integrity protection. In some cases, decryption with an incorrect password may return successfully due to a padding collision (approximately 1/256 chance), yielding garbage data instead of an error. This is a known limitation that will be addressed in future versions by moving to authenticated encryption (AEAD) modes like AES-GCM.
+Key derivation is implemented as a high-performance **two-step process** based on `PKCS5_PBKDF2_HMAC` with a SHA-256 hash:
+1. **Master Key**: The user-supplied passphrase is processed with **600,000 PBKDF2 iterations** and a unique per-installation salt (stored in `master.key`) to derive a cached master key.
+2. **Session Key**: For each ciphertext entry, a cryptographically random 16-byte salt and a single PBKDF2 iteration are used together with the master key to derive the specific AES-256-GCM key and IV.
+
+Each encrypted entry uses a standardized 28-byte header followed by the ciphertext and a trailing 16-byte authentication tag:
+* **Header (28 bytes)**:
+  * `Salt` (16 bytes): Random salt used for session key derivation.
+  * `IV` (12 bytes): Initialization Vector (GCM nonce).
+* **Data**: Encrypted ciphertext.
+* **Tag (16 bytes)**: GCM Authentication Tag appended at the **end** of the entry.
+
+This architecture provides the security of the full iteration count for the main passphrase while allowing sub-second performance for bulk vault operations. Unlike older versions that supported multiple AES modes, pgagroal now exclusively uses GCM to provide built-in integrity protection (via an authentication tag). This ensures that any tampering with the vault file or the use of an incorrect master key will be immediately detected.
 
 ### Authentication Query
 

@@ -3445,8 +3445,48 @@ pgagroal_get_master_key(char** masterkey)
    {
       goto error;
    }
+   line[strcspn(line, "\r\n")] = '\0';
 
-   pgagroal_base64_decode(&line[0], strlen(&line[0]), (void**)&mk, &mk_length);
+   if (pgagroal_base64_decode(&line[0], strlen(&line[0]), (void**)&mk, &mk_length) != 0 || mk_length == 0)
+   {
+      goto error;
+   }
+
+   /* Read required salt */
+   memset(&line, 0, sizeof(line));
+   if (fgets(line, sizeof(line), master_key_file) != NULL)
+   {
+      line[strcspn(line, "\r\n")] = '\0';
+      unsigned char* salt = NULL;
+      size_t salt_length = 0;
+      pgagroal_base64_decode(&line[0], strlen(&line[0]), (void**)&salt, &salt_length);
+      if (salt != NULL && salt_length == PBKDF2_SALT_LENGTH)
+      {
+         pgagroal_set_master_salt(salt);
+      }
+      else
+      {
+         pgagroal_log_error("pgagroal_get_master_key: Invalid salt length in master key file (expected %d, got %zu)", PBKDF2_SALT_LENGTH, salt_length);
+         pgagroal_set_master_salt(NULL);
+         if (salt != NULL)
+         {
+            free(salt);
+         }
+         if (mk != NULL)
+         {
+            pgagroal_cleanse(mk, mk_length);
+            free(mk);
+         }
+         fclose(master_key_file);
+         return 1;
+      }
+      free(salt);
+   }
+   else
+   {
+      pgagroal_log_error("Invalid master.key: missing salt line; please regenerate master.key");
+      goto error;
+   }
 
    *masterkey = mk;
 
@@ -3455,8 +3495,12 @@ pgagroal_get_master_key(char** masterkey)
    return 0;
 
 error:
-
-   free(mk);
+   pgagroal_set_master_salt(NULL);
+   if (mk != NULL)
+   {
+      pgagroal_cleanse(mk, mk_length);
+      free(mk);
+   }
 
    if (master_key_file)
    {

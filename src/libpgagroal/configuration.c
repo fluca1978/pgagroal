@@ -1678,7 +1678,7 @@ pgagroal_read_users_configuration(void* shm, char* filename)
             goto error;
          }
 
-         if (pgagroal_decrypt(decoded, decoded_length, master_key, &password, ENCRYPTION_AES_256_CBC))
+         if (pgagroal_decrypt(decoded, decoded_length, master_key, &password, ENCRYPTION_AES_256_GCM))
          {
             status = PGAGROAL_CONFIGURATION_STATUS_CANNOT_DECRYPT;
             goto error;
@@ -1817,7 +1817,7 @@ pgagroal_read_frontend_users_configuration(void* shm, char* filename)
             goto error;
          }
 
-         if (pgagroal_decrypt(decoded, decoded_length, master_key, &password, ENCRYPTION_AES_256_CBC))
+         if (pgagroal_decrypt(decoded, decoded_length, master_key, &password, ENCRYPTION_AES_256_GCM))
          {
             status = PGAGROAL_CONFIGURATION_STATUS_CANNOT_DECRYPT;
             goto error;
@@ -1981,7 +1981,7 @@ pgagroal_read_admins_configuration(void* shm, char* filename)
             goto error;
          }
 
-         if (pgagroal_decrypt(decoded, decoded_length, master_key, &password, ENCRYPTION_AES_256_CBC))
+         if (pgagroal_decrypt(decoded, decoded_length, master_key, &password, ENCRYPTION_AES_256_GCM))
          {
             status = PGAGROAL_CONFIGURATION_STATUS_CANNOT_DECRYPT;
             goto error;
@@ -2115,7 +2115,7 @@ pgagroal_vault_read_users_configuration(void* shm, char* filename)
             goto error;
          }
 
-         if (pgagroal_decrypt(decoded, decoded_length, master_key, &password, ENCRYPTION_AES_256_CBC))
+         if (pgagroal_decrypt(decoded, decoded_length, master_key, &password, ENCRYPTION_AES_256_GCM))
          {
             status = PGAGROAL_CONFIGURATION_STATUS_CANNOT_DECRYPT;
             goto error;
@@ -2270,7 +2270,7 @@ pgagroal_read_superuser_configuration(void* shm, char* filename)
             goto error;
          }
 
-         if (pgagroal_decrypt(decoded, decoded_length, master_key, &password, ENCRYPTION_AES_256_CBC))
+         if (pgagroal_decrypt(decoded, decoded_length, master_key, &password, ENCRYPTION_AES_256_GCM))
          {
             status = PGAGROAL_CONFIGURATION_STATUS_CANNOT_DECRYPT;
             goto error;

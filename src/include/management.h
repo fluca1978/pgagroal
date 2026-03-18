@@ -50,10 +50,11 @@ extern "C" {
 #define MANAGEMENT_COMPRESSION_LZ4   3
 #define MANAGEMENT_COMPRESSION_BZIP2 4
 
-#define MANAGEMENT_ENCRYPTION_NONE   0
-#define MANAGEMENT_ENCRYPTION_AES256 1
-#define MANAGEMENT_ENCRYPTION_AES192 2
-#define MANAGEMENT_ENCRYPTION_AES128 3
+/* Encryption algorithm codes for the management protocol */
+#define MANAGEMENT_ENCRYPTION_NONE       0
+#define MANAGEMENT_ENCRYPTION_AES256_GCM 1
+#define MANAGEMENT_ENCRYPTION_AES192_GCM 2
+#define MANAGEMENT_ENCRYPTION_AES128_GCM 3
 
 /**
  * Management categories
@@ -181,7 +182,7 @@ extern "C" {
  * Create header for management command
  * @param command The command
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @param json The target json
  * @return 0 upon success, otherwise 1
@@ -226,7 +227,7 @@ pgagroal_management_create_outcome_failure(struct json* json, int32_t error, str
  * @param mode The flush mode
  * @param database The database
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -239,7 +240,7 @@ pgagroal_management_request_flush(SSL* ssl, int socket, int32_t mode, char* data
  * @param socket The socket descriptor
  * @param database The database name
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -252,7 +253,7 @@ pgagroal_management_request_enabledb(SSL* ssl, int socket, char* database, uint8
  * @param socket The socket descriptor
  * @param database The database name
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -264,7 +265,7 @@ pgagroal_management_request_disabledb(SSL* ssl, int socket, char* database, uint
  * @param ssl The SSL connection
  * @param socket The socket descriptor
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -276,7 +277,7 @@ pgagroal_management_request_gracefully(SSL* ssl, int socket, uint8_t compression
  * @param ssl The SSL connection
  * @param socket The socket descriptor
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -288,7 +289,7 @@ pgagroal_management_request_shutdown(SSL* ssl, int socket, uint8_t compression, 
  * @param ssl The SSL connection
  * @param socket The socket descriptor
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -300,7 +301,7 @@ pgagroal_management_request_cancel_shutdown(SSL* ssl, int socket, uint8_t compre
  * @param ssl The SSL connection
  * @param socket The socket descriptor
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -312,7 +313,7 @@ pgagroal_management_request_status(SSL* ssl, int socket, uint8_t compression, ui
  * @param ssl The SSL connection
  * @param socket The socket
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -323,7 +324,7 @@ pgagroal_management_request_details(SSL* ssl, int socket, uint8_t compression, u
  * Management operation: isalive
  * @param socket The socket
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -335,7 +336,7 @@ pgagroal_management_request_ping(SSL* ssl, int socket, uint8_t compression, uint
  * @param ssl The SSL connection
  * @param socket The socket
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -348,7 +349,7 @@ pgagroal_management_request_clear(SSL* ssl, int socket, uint8_t compression, uin
  * @param socket The socket
  * @param server The server
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -361,7 +362,7 @@ pgagroal_management_request_clear_server(SSL* ssl, int socket, char* server, uin
  * @param socket The socket
  * @param server The server
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -373,7 +374,7 @@ pgagroal_management_request_switch_to(SSL* ssl, int socket, char* server, uint8_
  * @param ssl The SSL connection
  * @param socket The socket
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -425,7 +426,7 @@ pgagroal_management_request_reload(SSL* ssl, int socket, uint8_t compression, ui
  * @param ssl The SSL connection
  * @param socket The socket descriptor
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -437,7 +438,7 @@ pgagroal_management_request_conf_ls(SSL* ssl, int socket, uint8_t compression, u
  * @param ssl The SSL connection
  * @param socket The socket descriptor
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -451,7 +452,7 @@ pgagroal_management_request_conf_get(SSL* ssl, int socket, uint8_t compression, 
  * @param config_key The configuration key
  * @param config_value The configuration value
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -467,7 +468,7 @@ pgagroal_management_config_alias(SSL* ssl, int socket, uint8_t compression, uint
  * @param socket The socket descriptor
  * @param user The frontend user
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param output_format The output format
  * @return 0 upon success, otherwise 1
  */
@@ -485,7 +486,7 @@ pgagroal_management_request_conf_alias(SSL* ssl, int socket, uint8_t compression
  * @param start_time The start time
  * @param end_time The end time
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param payload The full payload
  * @return 0 upon success, otherwise 1
  */
@@ -499,7 +500,7 @@ pgagroal_management_response_ok(SSL* ssl, int socket, time_t start_time, time_t 
  * @param server The server
  * @param error The error code
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param payload The full payload
  * @return 0 upon success, otherwise 1
  */
@@ -532,7 +533,7 @@ pgagroal_management_read_json(SSL* ssl, int socket, uint8_t* compression, uint8_
  * @param ssl The SSL connection
  * @param socket The socket descriptor
  * @param compression The compress method for wire protocol
- * @param encryption The encrypt method for wire protocol
+ * @param encryption The encrypt method for wire protocol (None or *_GCM)
  * @param json The JSON structure
  * @return 0 upon success, otherwise 1
  */

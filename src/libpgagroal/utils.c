@@ -506,7 +506,16 @@ pgagroal_get_timestamp_string(time_t start_time, time_t end_time, int32_t* secon
 char*
 pgagroal_get_home_directory(void)
 {
-   struct passwd* pw = getpwuid(getuid());
+   char* home = getenv("HOME");
+   struct passwd* pw = NULL;
+
+   /* Only trust HOME if we are not in a privileged context (setuid/setgid) */
+   if (home != NULL && getuid() == geteuid() && getgid() == getegid())
+   {
+      return home;
+   }
+
+   pw = getpwuid(getuid());
 
    if (pw == NULL)
    {

@@ -269,7 +269,7 @@ route_users(char* username, char** response, SSL* s_ssl __attribute__((unused)),
    }
 
    // Call GET_PASSWORD at management port
-   if (pgagroal_management_request_get_password(mgmt_ssl, client_pgagroal_fd, username, COMPRESSION_NONE, ENCRYPTION_AES_256_CBC, MANAGEMENT_OUTPUT_FORMAT_JSON))
+   if (pgagroal_management_request_get_password(mgmt_ssl, client_pgagroal_fd, username, MANAGEMENT_COMPRESSION_NONE, MANAGEMENT_ENCRYPTION_AES256_GCM, MANAGEMENT_OUTPUT_FORMAT_JSON))
    {
       pgagroal_log_error("pgagroal-vault: Couldn't get password from the management");
       route_not_found(response);
@@ -567,7 +567,7 @@ test_pgagroal_connectivity(struct vault_configuration* config)
    }
 
    // Make a request for a non-existent user - this tests the full protocol
-   if (pgagroal_management_request_get_password(mgmt_ssl, client_pgagroal_fd, "__vault_test_nonexistent_user__", COMPRESSION_NONE, ENCRYPTION_AES_256_CBC, MANAGEMENT_OUTPUT_FORMAT_JSON))
+   if (pgagroal_management_request_get_password(mgmt_ssl, client_pgagroal_fd, "__vault_test_nonexistent_user__", MANAGEMENT_COMPRESSION_NONE, MANAGEMENT_ENCRYPTION_AES256_GCM, MANAGEMENT_OUTPUT_FORMAT_JSON))
    {
       pgagroal_log_debug("test_pgagroal_connectivity: Failed to send test request");
       goto cleanup;

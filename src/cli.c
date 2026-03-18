@@ -343,7 +343,8 @@ usage(void)
    printf("  -L, --logfile FILE                           Set the log file\n");
    printf("  -F, --format text|json|raw                   Set the output format\n");
    printf("  -C, --compress none|gz|zstd|lz4|bz2          Compress the wire protocol\n");
-   printf("  -E, --encrypt none|aes|aes256|aes192|aes128  Encrypt the wire protocol\n");
+   printf("  -E, --encrypt none|aes|aes256|aes192|aes128  Encrypt the wire protocol using AES-GCM\n");
+   printf("                |aes256gcm|aes192gcm|aes128gcm (Note: non-GCM AES modes are not supported)\n");
    printf("  -v, --verbose                                Output text string of result\n");
    printf("  -V, --version                                Display version information\n");
    printf("  -?, --help                                   Display help\n");
@@ -498,6 +499,7 @@ main(int argc, char** argv)
             }
             else if (!strncmp(optarg, "none", MISC_LENGTH))
             {
+               compression = MANAGEMENT_COMPRESSION_NONE;
                break;
             }
             else
@@ -507,24 +509,21 @@ main(int argc, char** argv)
             }
             break;
          case 'E':
-            if (!strncmp(optarg, "aes", MISC_LENGTH))
+            if (!strcmp(optarg, "aes") || !strcmp(optarg, "aes256") || !strcmp(optarg, "aes256gcm"))
             {
-               encryption = MANAGEMENT_ENCRYPTION_AES256;
+               encryption = MANAGEMENT_ENCRYPTION_AES256_GCM;
             }
-            else if (!strncmp(optarg, "aes256", MISC_LENGTH))
+            else if (!strcmp(optarg, "aes192") || !strcmp(optarg, "aes192gcm"))
             {
-               encryption = MANAGEMENT_ENCRYPTION_AES256;
+               encryption = MANAGEMENT_ENCRYPTION_AES192_GCM;
             }
-            else if (!strncmp(optarg, "aes192", MISC_LENGTH))
+            else if (!strcmp(optarg, "aes128") || !strcmp(optarg, "aes128gcm"))
             {
-               encryption = MANAGEMENT_ENCRYPTION_AES192;
+               encryption = MANAGEMENT_ENCRYPTION_AES128_GCM;
             }
-            else if (!strncmp(optarg, "aes128", MISC_LENGTH))
+            else if (!strcmp(optarg, "none"))
             {
-               encryption = MANAGEMENT_ENCRYPTION_AES128;
-            }
-            else if (!strncmp(optarg, "none", MISC_LENGTH))
-            {
+               encryption = MANAGEMENT_ENCRYPTION_NONE;
                break;
             }
             else
@@ -2087,23 +2086,14 @@ translate_encryption(int32_t encryption_code)
    char* encryption_output = NULL;
    switch (encryption_code)
    {
-      case ENCRYPTION_AES_256_CBC:
-         encryption_output = pgagroal_append(encryption_output, "aes-256-cbc");
+      case MANAGEMENT_ENCRYPTION_AES256_GCM:
+         encryption_output = pgagroal_append(encryption_output, "aes-256-gcm");
          break;
-      case ENCRYPTION_AES_192_CBC:
-         encryption_output = pgagroal_append(encryption_output, "aes-192-cbc");
+      case MANAGEMENT_ENCRYPTION_AES192_GCM:
+         encryption_output = pgagroal_append(encryption_output, "aes-192-gcm");
          break;
-      case ENCRYPTION_AES_128_CBC:
-         encryption_output = pgagroal_append(encryption_output, "aes-128-cbc");
-         break;
-      case ENCRYPTION_AES_256_CTR:
-         encryption_output = pgagroal_append(encryption_output, "aes-256-ctr");
-         break;
-      case ENCRYPTION_AES_192_CTR:
-         encryption_output = pgagroal_append(encryption_output, "aes-192-ctr");
-         break;
-      case ENCRYPTION_AES_128_CTR:
-         encryption_output = pgagroal_append(encryption_output, "aes-128-ctr");
+      case MANAGEMENT_ENCRYPTION_AES128_GCM:
+         encryption_output = pgagroal_append(encryption_output, "aes-128-gcm");
          break;
       default:
          encryption_output = pgagroal_append(encryption_output, "none");
