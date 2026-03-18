@@ -53,39 +53,45 @@ typedef enum {
 /* Test function pointer type */
 typedef int (*mctf_test_func_t)(void);
 
-/* Test registration structure */
+/**
+ * Definition of a single test case registered in MCTF.
+ */
 typedef struct mctf_test
 {
-   char* name;
-   char* module;
-   char* file;
-   mctf_test_func_t func;
-   struct mctf_test* next;
+   char* name;             /**< Human readable test name. */
+   char* module;           /**< Logical module/group this test belongs to. */
+   char* file;             /**< Source file where the test is defined. */
+   mctf_test_func_t func;  /**< Function implementing the test. */
+   struct mctf_test* next; /**< Pointer to the next test in the registration list. */
 } mctf_test_t;
 
-/* Test result structure */
+/**
+ * Execution result for a single test case.
+ */
 typedef struct mctf_result
 {
-   const char* test_name;
-   const char* file;
-   int line;
-   bool passed;
-   bool skipped;
-   int error_code;
-   char* error_message;
-   long elapsed_ms;
+   const char* test_name; /**< Name of the test that produced this result. */
+   const char* file;      /**< Source file where the failing assertion occurred. */
+   int line;              /**< Line number of the failing assertion, or 0 on success. */
+   bool passed;           /**< True if the test completed successfully. */
+   bool skipped;          /**< True if the test was explicitly skipped. */
+   int error_code;        /**< Error code associated with a failure or skip. */
+   char* error_message;   /**< Dynamically allocated, human readable error message. */
+   long elapsed_ms;       /**< Execution time of the test in milliseconds. */
 } mctf_result_t;
 
-/* Test runner state */
+/**
+ * Aggregated state for running and tracking multiple tests.
+ */
 typedef struct mctf_runner
 {
-   mctf_test_t* tests;
-   mctf_result_t* results;
-   size_t test_count;
-   size_t result_count;
-   size_t passed_count;
-   size_t failed_count;
-   size_t skipped_count;
+   mctf_test_t* tests;     /**< Head of the linked list of registered tests. */
+   mctf_result_t* results; /**< Array of collected test results. */
+   size_t test_count;      /**< Number of registered tests. */
+   size_t result_count;    /**< Number of populated entries in @ref results. */
+   size_t passed_count;    /**< Count of tests that passed. */
+   size_t failed_count;    /**< Count of tests that failed. */
+   size_t skipped_count;   /**< Count of tests that were skipped. */
 } mctf_runner_t;
 
 /* Global error state */
