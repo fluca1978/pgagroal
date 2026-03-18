@@ -45,6 +45,8 @@ Frontend users (`-F`) requires a user vault (`-u`) to be defined.
 
 pgagroal uses AES-256-CBC encryption for storing user credentials in vault files. Key derivation uses PKCS5_PBKDF2_HMAC with a SHA-256 hash, a cryptographically random 16-byte salt, and a high iteration count to protect against brute-force attacks.
 
+Note that AES-256-CBC does not provide built-in integrity protection. In some cases, decryption with an incorrect password may return successfully due to a padding collision (approximately 1/256 chance), yielding garbage data instead of an error. This is a known limitation that will be addressed in future versions by moving to authenticated encryption (AEAD) modes like AES-GCM.
+
 ### Authentication Query
 
 Authentication query will use the below defined function to query the database

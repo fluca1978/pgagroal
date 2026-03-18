@@ -177,12 +177,17 @@ cleanup:
 }
 
 /**
- * Test: Decryption with wrong password fails.
+ * Test: Decryption with wrong password does not leak plaintext.
  *
  * Encrypts data with one password and attempts to decrypt with a
- * different password. Verifies that decryption fails.
+ * different password.
+ *
+ * Since AES-CBC/PKCS#7 has a 1/256 chance of padding collision, 
+ * decryption with a wrong password might occasionally return success (0).
+ * This test verifies that even if it "succeeds", the decrypted payload 
+ * is NOT the original plaintext.
  */
-MCTF_TEST(test_aes_decrypt_wrong_password_fails)
+MCTF_TEST(test_aes_decrypt_wrong_password_no_leak)
 {
    char* plaintext = "secret-data-wrong-password-test";
    char* correct_password = "correct-master-key";
@@ -200,7 +205,17 @@ MCTF_TEST(test_aes_decrypt_wrong_password_fails)
 
    ret_dec = pgagroal_decrypt(ciphertext, ciphertext_length, wrong_password, &decrypted, ENCRYPTION_AES_256_CBC);
 
-   MCTF_ASSERT(ret_dec != 0, cleanup, "pgagroal_decrypt with wrong password should fail");
+   if (ret_dec == 0)
+   {
+      /* Padding collision: successfully decrypted into garbage */
+      MCTF_ASSERT_PTR_NONNULL(decrypted, cleanup, "decrypted pointer should not be NULL on success");
+      MCTF_ASSERT_STR_NEQ(decrypted, plaintext, cleanup, "decrypted garbage should not match plaintext");
+   }
+   else
+   {
+      /* Expected failure */
+      MCTF_ASSERT_PTR_NULL(decrypted, cleanup, "decrypted should be NULL on failure");
+   }
 
 cleanup:
    free(ciphertext);

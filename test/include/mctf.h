@@ -264,6 +264,39 @@ mctf_format_error(const char* format, ...);
    }                                                                               \
    while (0)
 
+/* String inequality assertion macro */
+#define MCTF_ASSERT_STR_NEQ(actual, expected, error_label, ...)                         \
+   do                                                                                   \
+   {                                                                                    \
+      const char* _actual = (actual);                                                   \
+      const char* _expected = (expected);                                               \
+      bool _equal = false;                                                              \
+      if (_actual == NULL && _expected == NULL)                                         \
+      {                                                                                 \
+         _equal = true;                                                                 \
+      }                                                                                 \
+      else if (_actual != NULL && _expected != NULL && strcmp(_actual, _expected) == 0) \
+      {                                                                                 \
+         _equal = true;                                                                 \
+      }                                                                                 \
+      if (_equal)                                                                       \
+      {                                                                                 \
+         mctf_errno = __LINE__;                                                         \
+         if (sizeof(#__VA_ARGS__) > 1)                                                  \
+         {                                                                              \
+            mctf_errmsg = mctf_format_error(__VA_ARGS__);                               \
+         }                                                                              \
+         else                                                                           \
+         {                                                                              \
+            mctf_errmsg = mctf_format_error("Expected '%s' to be different from '%s'",  \
+                                            _actual ? _actual : "NULL",                 \
+                                            _expected ? _expected : "NULL");            \
+         }                                                                              \
+         goto error_label;                                                              \
+      }                                                                                 \
+   }                                                                                    \
+   while (0)
+
 /* Float assertion macros */
 #define MCTF_ASSERT_FLOAT_EQ(actual, expected, error_label, ...)                           \
    do                                                                                      \
