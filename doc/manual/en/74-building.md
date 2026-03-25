@@ -95,30 +95,34 @@ These packages will be detected during `cmake` and built as part of the main bui
 
 ### Policy and guidelines for using AI
 
+*Please note that pull requests that violate this guideline will be closed without review!*
+
 Our goal in the pgagroal project is to develop an excellent software system. This requires careful attention to
-detail in every change we integrate. Maintainer time and attention is very limited, so it's important that changes
+detail in every change we integrate. Maintainers time and attention is very limited, so it's important that changes
 you ask us to review represent your best work.
 
 You are encouraged to use tools that help you write good code, including AI tools. However, as noted above, you always
 need to understand and explain the changes you're proposing to make, whether or not you used an LLM as part of
 your process to produce them. The answer to “Why did you make change X?” should never be “I'm not sure. The AI did it.”
 
-Do not submit an AI-generated PR you haven't personally understood and tested, as this wastes maintainers' time.
-PRs that appear to violate this guideline will be closed without review. Using AI as a coding assistant and help you
-create a skeleton for your code.
+Do not submit an AI-generated PR that includes code you haven't personally understood and tested, as this wastes maintainers' time.
+Using AI as a coding assistant is ok and can help you in creating a skeleton for your code. However, you must be
+the final owner and contributor of the code, hence AI co-authored commits will be refused.
+
+Please, keep in mind the following:
 
 * Don't skip becoming familiar with the part of the codebase you're working on. This will let you write better prompts
   and validate their output if you use an LLM. Code assistants can be a useful search engine/discovery tool in this process,
   but don't trust claims they make about how pgagroal works. LLMs are often wrong, even about details that are clearly
-  answered in the pgagroal documentation and surrounding code
+  answered in the pgagroal documentation and surrounding code.
 * Don't simply ask an LLM to add code comments, as it will likely produce a bunch of text that unnecessarily explains
   what's already clear from the code. If using an LLM to generate comments, be really specific in your request,
   demand succinctness, and carefully edit the result.
 
 **Using AI for communication**
 
-As noted above, pgagroal's contributors are expected to communicate with intention, to avoid wasting maintainer time
-with long, sloppy writing. We strongly prefer clear and concise communication about points that actually require discussion
+As noted above, pgagroal's contributors are expected to communicate with intention, to avoid wasting maintainers time
+with long, sloppy writing. We strongly prefer clear and concise communications about points that actually require discussion
 over long AI-generated comments.
 
 When you use an LLM to write a message for you, it remains your responsibility to read through the whole thing and make sure
