@@ -323,6 +323,20 @@ int
 pgagroal_tls_own(struct tls* tls);
 
 /**
+ * Compute the tls-server-end-point channel binding hash (RFC 5929 4.1) for a
+ * connection's certificate: our own when acting as the TLS server, the peer's
+ * when acting as the client
+ * @param ssl The OpenSSL connection
+ * @param peer true to hash the peer certificate, false for our own
+ * @param out The destination buffer (>= EVP_MAX_MD_SIZE)
+ * @param cap The buffer capacity
+ * @param out_len The produced hash length
+ * @return PGAGROAL_TLS_OK upon success, otherwise PGAGROAL_TLS_ERROR
+ */
+int
+pgagroal_tls_cert_endpoint_hash(SSL* ssl, bool peer, unsigned char* out, size_t cap, size_t* out_len);
+
+/**
  * Initialize one record direction from its TLS 1.3 application traffic secret
  * @param dir The direction
  * @param aead The AEAD suite (PGAGROAL_TLS_AEAD_*)

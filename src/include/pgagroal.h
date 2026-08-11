@@ -172,6 +172,10 @@ extern "C" {
 #define HUGEPAGE_TRY                   1
 #define HUGEPAGE_ON                    2
 
+#define CHANNEL_BINDING_DISABLED       0
+#define CHANNEL_BINDING_PREFER         1
+#define CHANNEL_BINDING_REQUIRE        2
+
 #define STARTUP_VALIDATION_OFF         0
 #define STARTUP_VALIDATION_TRY         1
 #define STARTUP_VALIDATION_ON          2
@@ -384,22 +388,23 @@ extern void* prometheus_cache_shmem;
  */
 struct server
 {
-   char name[MISC_LENGTH];       /**< The name of the server */
-   char host[MISC_LENGTH];       /**< The host name of the server */
-   int port;                     /**< The port of the server */
-   int version;                  /**< The major version of the server */
-   int minor_version;            /**< The minor version of the server */
-   char system_identifier[64];   /**< The system identifier of the server */
-   bool tls;                     /**< Use TLS if possible */
-   bool valid;                   /**< Is the server valid */
-   char tls_cert_file[MAX_PATH]; /**< TLS certificate path */
-   char tls_key_file[MAX_PATH];  /**< TLS key path */
-   char tls_ca_file[MAX_PATH];   /**< TLS CA certificate path */
-   atomic_schar state;           /**< The state of the server */
-   atomic_schar health_state;    /**< The health state of the server */
-   unsigned int failures;        /**< The number of failures */
-   atomic_schar auth_type;       /**< The authentication type used for health check */
-   int lineno;                   /**< The line number within the configuration file */
+   char name[MISC_LENGTH];        /**< The name of the server */
+   char host[MISC_LENGTH];        /**< The host name of the server */
+   int port;                      /**< The port of the server */
+   int version;                   /**< The major version of the server */
+   int minor_version;             /**< The minor version of the server */
+   char system_identifier[64];    /**< The system identifier of the server */
+   bool tls;                      /**< Use TLS if possible */
+   bool valid;                    /**< Is the server valid */
+   char tls_cert_file[MAX_PATH];  /**< TLS certificate path */
+   char tls_key_file[MAX_PATH];   /**< TLS key path */
+   char tls_ca_file[MAX_PATH];    /**< TLS CA certificate path */
+   unsigned char channel_binding; /**< SCRAM channel binding (CHANNEL_BINDING_*) */
+   atomic_schar state;            /**< The state of the server */
+   atomic_schar health_state;     /**< The health state of the server */
+   unsigned int failures;         /**< The number of failures */
+   atomic_schar auth_type;        /**< The authentication type used for health check */
+   int lineno;                    /**< The line number within the configuration file */
 } __attribute__((aligned(64)));
 
 #define FOREACH_SERVER for (int i = 0; i < config->number_of_servers; i++)

@@ -129,6 +129,7 @@ static int to_update_process_title(char* where, int value);
 static int to_validation(char* where, int value);
 static int to_startup_validation(char* where, int value);
 static int to_hugepage(char* where, int value);
+static int to_channel_binding(char* where, int value);
 static int to_pipeline(char* where, int value);
 static int to_log_mode(char* where, int value);
 static int to_log_level(char* where, int value);
@@ -316,6 +317,7 @@ pgagroal_read_configuration(void* shm, char* filename, bool emit_warnings)
                memcpy(&srv.name, &section, strlen(section));
                srv.lineno = lineno;
                srv.valid = true;
+               srv.channel_binding = CHANNEL_BINDING_PREFER;
                idx_server++;
             }
          }
@@ -3015,6 +3017,30 @@ pgagroal_as_hugepage(char* str, unsigned char* hp)
 }
 
 int
+pgagroal_as_channel_binding(char* str, unsigned char* cb)
+{
+   if (!strcasecmp(str, "disabled"))
+   {
+      *cb = CHANNEL_BINDING_DISABLED;
+      return 0;
+   }
+
+   if (!strcasecmp(str, "prefer"))
+   {
+      *cb = CHANNEL_BINDING_PREFER;
+      return 0;
+   }
+
+   if (!strcasecmp(str, "require"))
+   {
+      *cb = CHANNEL_BINDING_REQUIRE;
+      return 0;
+   }
+
+   return 1;
+}
+
+int
 pgagroal_as_startup_validation(char* str, int* sv)
 {
    if (!strcasecmp(str, "off"))
@@ -3909,6 +3935,7 @@ static bool
 is_same_tls(struct server* src, struct server* dst)
 {
    if (src->tls == dst->tls &&
+       src->channel_binding == dst->channel_binding &&
        !strncmp(src->tls_cert_file, dst->tls_cert_file, MAX_PATH) &&
        !strncmp(src->tls_key_file, dst->tls_key_file, MAX_PATH) &&
        !strncmp(src->tls_ca_file, dst->tls_ca_file, MAX_PATH))
@@ -4019,6 +4046,7 @@ copy_server(struct server* dst, struct server* src)
    dst->minor_version = minor_version;
    memcpy(&dst->system_identifier[0], system_identifier, sizeof(dst->system_identifier));
    dst->tls = src->tls;
+   dst->channel_binding = src->channel_binding;
    memcpy(&dst->tls_cert_file[0], &src->tls_cert_file[0], MAX_PATH);
    memcpy(&dst->tls_key_file[0], &src->tls_key_file[0], MAX_PATH);
    memcpy(&dst->tls_ca_file[0], &src->tls_ca_file[0], MAX_PATH);
@@ -5016,6 +5044,10 @@ pgagroal_write_server_config_value(char* buffer, char* server_name, char* config
    {
       return to_bool(buffer, config->servers[server_index].tls);
    }
+   else if (!strncmp(config_key, "channel_binding", MISC_LENGTH))
+   {
+      return to_channel_binding(buffer, config->servers[server_index].channel_binding);
+   }
    else if (!strncmp(config_key, "tls_cert_file", MAX_PATH))
    {
       return to_string(buffer, config->servers[server_index].tls_cert_file, buffer_size);
@@ -5431,6 +5463,36 @@ to_hugepage(char* where, int value)
 }
 
 /**
+ * An utility function to convert the channel_binding enum to its string value
+ * @param where the buffer used to store the resulting string
+ * @param value the server channel_binding setting
+ * @return 0 on success, 1 otherwise
+ */
+static int
+to_channel_binding(char* where, int value)
+{
+   if (!where || value < 0)
+   {
+      return 1;
+   }
+
+   switch (value)
+   {
+      case CHANNEL_BINDING_DISABLED:
+         pgagroal_snprintf(where, MISC_LENGTH, "%s", "disabled");
+         break;
+      case CHANNEL_BINDING_PREFER:
+         pgagroal_snprintf(where, MISC_LENGTH, "%s", "prefer");
+         break;
+      case CHANNEL_BINDING_REQUIRE:
+         pgagroal_snprintf(where, MISC_LENGTH, "%s", "require");
+         break;
+   }
+
+   return 0;
+}
+
+/**
  * An utility function to convert the enumeration of values for the pipeline setting
  * into one of its possible string descriptions.
  *
@@ -5826,6 +5888,13 @@ pgagroal_apply_main_configuration(struct main_configuration* config,
    else if (key_in_section("tls", section, key, false, &unknown))
    {
       if (pgagroal_as_bool(value, &srv->tls))
+      {
+         unknown = true;
+      }
+   }
+   else if (key_in_section("channel_binding", section, key, false, &unknown))
+   {
+      if (pgagroal_as_channel_binding(value, &srv->channel_binding))
       {
          unknown = true;
       }

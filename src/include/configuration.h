@@ -701,6 +701,15 @@ int
 pgagroal_as_hugepage(char* str, unsigned char* hp);
 
 /**
+ * Parse a string as a channel binding setting
+ * @param str The string to parse
+ * @param cb The resulting channel binding setting
+ * @return 0 on success, 1 on failure
+ */
+int
+pgagroal_as_channel_binding(char* str, unsigned char* cb);
+
+/**
  * Parse a string as a startup validation mode
  * @param str The string to parse
  * @param sv The resulting startup validation mode

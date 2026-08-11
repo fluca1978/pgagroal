@@ -846,3 +846,56 @@ cleanup:
    }
    MCTF_FINISH();
 }
+
+// tls-server-end-point channel binding hash matches a direct SHA-256 digest of the cert
+MCTF_TEST(test_pgagroal_tls_cert_endpoint_hash)
+{
+   EVP_PKEY* key = NULL;
+   X509* crt = NULL;
+   SSL_CTX* ctx = NULL;
+   SSL* ssl = NULL;
+   unsigned char got[EVP_MAX_MD_SIZE];
+   unsigned char expected[EVP_MAX_MD_SIZE];
+   size_t got_len = 0;
+   unsigned int exp_len = 0;
+
+   MCTF_ASSERT_INT_EQ(tls_test_self_signed(&key, &crt), 0, cleanup, "self-signed cert");
+   ctx = SSL_CTX_new(TLS_server_method());
+   MCTF_ASSERT(ctx != NULL, cleanup, "server ctx");
+   MCTF_ASSERT(SSL_CTX_use_certificate(ctx, crt) == 1, cleanup, "use cert");
+   MCTF_ASSERT(SSL_CTX_use_PrivateKey(ctx, key) == 1, cleanup, "use key");
+   ssl = SSL_new(ctx);
+   MCTF_ASSERT(ssl != NULL, cleanup, "ssl");
+
+   /* our own certificate (peer = false); no handshake needed */
+   MCTF_ASSERT_INT_EQ(pgagroal_tls_cert_endpoint_hash(ssl, false, got, sizeof(got), &got_len),
+                      PGAGROAL_TLS_OK, cleanup, "endpoint hash");
+
+   /* a SHA-256-signed certificate binds with SHA-256 (RFC 5929 4.1) */
+   X509_digest(crt, EVP_sha256(), expected, &exp_len);
+   MCTF_ASSERT(got_len == exp_len && got_len == 32, cleanup, "hash length 32 (SHA-256)");
+   MCTF_ASSERT(memcmp(got, expected, got_len) == 0, cleanup, "matches X509_digest(SHA-256)");
+
+   /* a NULL connection is rejected */
+   MCTF_ASSERT_INT_EQ(pgagroal_tls_cert_endpoint_hash(NULL, false, got, sizeof(got), &got_len),
+                      PGAGROAL_TLS_ERROR, cleanup, "null ssl rejected");
+
+cleanup:
+   if (ssl != NULL)
+   {
+      SSL_free(ssl);
+   }
+   if (ctx != NULL)
+   {
+      SSL_CTX_free(ctx);
+   }
+   if (crt != NULL)
+   {
+      X509_free(crt);
+   }
+   if (key != NULL)
+   {
+      EVP_PKEY_free(key);
+   }
+   MCTF_FINISH();
+}

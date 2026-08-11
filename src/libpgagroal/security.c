@@ -87,6 +87,7 @@ static int client_password(SSL* c_ssl, int client_fd, char* username, char* pass
 static int client_scram256(SSL* c_ssl, int client_fd, char* username, char* password, int slot);
 static int client_ok(SSL* c_ssl, int client_fd, int slot);
 static int server_passthrough(struct message* msg, int auth_type, SSL* c_ssl, SSL* s_ssl, int client_fd, int slot);
+static void scram_strip_channel_binding(struct message* msg);
 static int server_authenticate(struct message* msg, int auth_type, char* username, char* password,
                                int slot, SSL* server_ssl);
 static int server_trust(int slot, SSL* server_ssl);
@@ -1954,6 +1955,12 @@ client_scram256(SSL* c_ssl, int client_fd, char* username __attribute__((unused)
    size_t server_signature_calc_length = 0;
    char* base64_server_signature_calc = NULL;
    size_t base64_server_signature_calc_length;
+   bool client_plus = false;
+   char gs2_header[64];
+   size_t gs2_header_length = 0;
+   char* base64_channel_binding = NULL;
+   unsigned char* channel_binding = NULL;
+   size_t channel_binding_length = 0;
    struct main_configuration* config;
    struct message* msg = NULL;
    struct message* sasl_continue = NULL;
@@ -1963,7 +1970,7 @@ client_scram256(SSL* c_ssl, int client_fd, char* username __attribute__((unused)
 
    config = (struct main_configuration*)shmem;
 
-   status = pgagroal_write_auth_scram256(c_ssl, client_fd);
+   status = pgagroal_write_auth_scram256(c_ssl, client_fd, true);
    if (status != MESSAGE_STATUS_OK)
    {
       goto error;
@@ -1991,17 +1998,70 @@ retry:
       goto error;
    }
 
-   /* 'p' + length + mechanism + "n,,n=,r=" + nounce */
+   /* SASLInitialResponse: 'p' + length + mechanism + NUL + int32 initial-response
+    * length + gs2-header + client-first-message-bare */
    if (msg->length <= 26)
    {
       goto error;
    }
 
-   client_first_message_bare = calloc(1, msg->length - 25);
+   {
+      char* mechanism = (char*)msg->data + 5;
+      char* ir;
+      size_t ir_length;
+      size_t header;
+      size_t gs2_length = 0;
+      int commas = 0;
 
-   memcpy(client_first_message_bare, msg->data + 26, msg->length - 26);
+      client_plus = strcmp(mechanism, "SCRAM-SHA-256-PLUS") == 0;
 
-   get_scram_attribute('r', (char*)msg->data + 26, msg->length - 26, &client_nounce);
+      /* The initial response follows the mechanism NUL and its int32 length */
+      header = 5 + strlen(mechanism) + 1 + 4;
+      if ((size_t)msg->length <= header)
+      {
+         goto error;
+      }
+      ir = (char*)msg->data + header;
+      ir_length = msg->length - header;
+
+      /* The gs2 header ends after the second comma: "n,," / "y,," / "p=...,," */
+      for (size_t i = 0; i < ir_length; i++)
+      {
+         if (ir[i] == ',' && ++commas == 2)
+         {
+            gs2_length = i + 1;
+            break;
+         }
+      }
+      if (commas < 2 || gs2_length > sizeof(gs2_header))
+      {
+         goto error;
+      }
+
+      if (client_plus)
+      {
+         /* Only tls-server-end-point is supported, and only over a TLS frontend */
+         if (c_ssl == NULL || gs2_length != 24 ||
+             memcmp(ir, "p=tls-server-end-point,,", 24) != 0)
+         {
+            goto error;
+         }
+      }
+      else if (c_ssl != NULL && ir[0] == 'y')
+      {
+         /* We advertised -PLUS, so "y" is a channel-binding downgrade attempt */
+         goto error;
+      }
+
+      /* msg is reused for later reads, so keep our own copy of the gs2 header */
+      memcpy(gs2_header, ir, gs2_length);
+      gs2_header_length = gs2_length;
+
+      client_first_message_bare = calloc(1, ir_length - gs2_length + 1);
+      memcpy(client_first_message_bare, ir + gs2_length, ir_length - gs2_length);
+
+      get_scram_attribute('r', client_first_message_bare, ir_length - gs2_length, &client_nounce);
+   }
 
    if (client_nounce == NULL)
    {
@@ -2039,24 +2099,69 @@ retry:
       goto error;
    }
 
-   /* 'p' + length + "c=biws,r=" + nounces (57 bytes) + ",p=" + proof */
+   /* client-final: 'p' + length + "c=<cbind>,r=<combined>" + ",p=" + proof */
    if (msg->length < 62)
    {
       goto error;
    }
 
-   get_scram_attribute('p', (char*)msg->data + 5, msg->length - 5, &base64_client_proof);
-
-   if (base64_client_proof == NULL)
    {
-      goto error;
+      char* cf = (char*)msg->data + 5;
+      size_t cf_length = msg->length - 5;
+      char* proof_delim = NULL;
+      unsigned char expected_cbind[64 + EVP_MAX_MD_SIZE];
+      size_t expected_cbind_length;
+      size_t endpoint_hash_length = 0;
+
+      get_scram_attribute('p', cf, cf_length, &base64_client_proof);
+      if (base64_client_proof == NULL)
+      {
+         goto error;
+      }
+      pgagroal_base64_decode(base64_client_proof, strlen(base64_client_proof), (void**)&client_proof_received, &client_proof_received_length);
+
+      /* client-final-message-without-proof is everything before ",p=" */
+      for (size_t i = 0; i + 2 < cf_length; i++)
+      {
+         if (cf[i] == ',' && cf[i + 1] == 'p' && cf[i + 2] == '=')
+         {
+            proof_delim = cf + i;
+            break;
+         }
+      }
+      if (proof_delim == NULL)
+      {
+         goto error;
+      }
+      client_final_message_without_proof = calloc(1, (proof_delim - cf) + 1);
+      memcpy(client_final_message_without_proof, cf, proof_delim - cf);
+
+      /* Channel binding: c= must equal base64(gs2-header [|| endpoint hash]) */
+      get_scram_attribute('c', cf, cf_length, &base64_channel_binding);
+      if (base64_channel_binding == NULL)
+      {
+         goto error;
+      }
+      pgagroal_base64_decode(base64_channel_binding, strlen(base64_channel_binding), (void**)&channel_binding, &channel_binding_length);
+
+      memcpy(expected_cbind, gs2_header, gs2_header_length);
+      expected_cbind_length = gs2_header_length;
+      if (client_plus)
+      {
+         if (pgagroal_tls_cert_endpoint_hash(c_ssl, false, &expected_cbind[gs2_header_length],
+                                             sizeof(expected_cbind) - gs2_header_length, &endpoint_hash_length))
+         {
+            goto error;
+         }
+         expected_cbind_length += endpoint_hash_length;
+      }
+
+      if (channel_binding == NULL || channel_binding_length != expected_cbind_length ||
+          memcmp(channel_binding, expected_cbind, expected_cbind_length) != 0)
+      {
+         goto error;
+      }
    }
-
-   pgagroal_base64_decode(base64_client_proof, strlen(base64_client_proof), (void**)&client_proof_received, &client_proof_received_length);
-
-   client_final_message_without_proof = calloc(1, 58);
-
-   memcpy(client_final_message_without_proof, msg->data + 5, 57);
 
    sasl_prep(password, &password_prep);
 
@@ -2115,7 +2220,9 @@ retry:
    free(salt);
    free(base64_salt);
    free(base64_client_proof);
+   free(base64_channel_binding);
    free(client_proof_received);
+   free(channel_binding);
    free(client_proof_calc);
    free(server_signature_calc);
    free(base64_server_signature_calc);
@@ -2135,7 +2242,9 @@ bad_password:
    free(salt);
    free(base64_salt);
    free(base64_client_proof);
+   free(base64_channel_binding);
    free(client_proof_received);
+   free(channel_binding);
    free(client_proof_calc);
    free(server_signature_calc);
    free(base64_server_signature_calc);
@@ -2155,7 +2264,9 @@ error:
    free(salt);
    free(base64_salt);
    free(base64_client_proof);
+   free(base64_channel_binding);
    free(client_proof_received);
+   free(channel_binding);
    free(client_proof_calc);
    free(server_signature_calc);
    free(base64_server_signature_calc);
@@ -2262,6 +2373,13 @@ server_passthrough(struct message* msg, int auth_type, SSL* c_ssl, SSL* s_ssl, i
       pgagroal_log_message(msg);
       pgagroal_log_error("Security message too large: %ld", msg->length);
       goto error;
+   }
+
+   /* Passthrough terminates the client TLS locally, so channel binding cannot be
+    * relayed to the backend: never offer SCRAM-SHA-256-PLUS on this path. */
+   if (auth_type == SECURITY_SCRAM256)
+   {
+      scram_strip_channel_binding(msg);
    }
 
    config->connections[slot].security_lengths[auth_index] = msg->length;
@@ -2649,11 +2767,92 @@ error:
    return AUTH_ERROR;
 }
 
+/* Return true if the backend AuthenticationSASL message advertises the mechanism. */
+static bool
+scram_mechanism_offered(char* sasl, size_t sasl_length, const char* name)
+{
+   size_t offset = 9; /* 'R' + int32 length + int32 auth type */
+
+   if (sasl == NULL)
+   {
+      return false;
+   }
+
+   while (offset < sasl_length)
+   {
+      char* mechanism = sasl + offset;
+      size_t len = strlen(mechanism);
+
+      if (len == 0)
+      {
+         break;
+      }
+      if (!strcmp(mechanism, name))
+      {
+         return true;
+      }
+      offset += len + 1;
+   }
+
+   return false;
+}
+
+/* Drop SCRAM-SHA-256-PLUS from a relayed AuthenticationSASL mechanism list.
+ * pgagroal terminates the client TLS, so a passthrough client that bound to our
+ * certificate would be rejected by the backend; not advertising channel binding
+ * lets channel_binding=prefer fall back to SCRAM-SHA-256 and channel_binding=require
+ * fail cleanly. Mirrors PostgreSQL's conditional scram_get_mechanisms(). */
+static void
+scram_strip_channel_binding(struct message* msg)
+{
+   char* data;
+   size_t offset = 9; /* 'R' + int32 length + int32 auth type */
+   size_t out = 9;
+
+   if (msg == NULL || msg->kind != 'R' || msg->length < 9 ||
+       pgagroal_read_int32((char*)msg->data + 5) != 10)
+   {
+      return;
+   }
+
+   data = (char*)msg->data;
+
+   while (offset < (size_t)msg->length && data[offset] != '\0')
+   {
+      char* mechanism = data + offset;
+      size_t len = strlen(mechanism);
+
+      if (strcmp(mechanism, "SCRAM-SHA-256-PLUS"))
+      {
+         if (out != offset)
+         {
+            memmove(data + out, mechanism, len + 1);
+         }
+         out += len + 1;
+      }
+
+      offset += len + 1;
+   }
+
+   /* Empty string terminates the mechanism list */
+   data[out] = '\0';
+   out += 1;
+
+   msg->length = out;
+   pgagroal_write_int32(data + 1, out - 1);
+}
+
 static int
 server_scram256(char* username, char* password, int slot, SSL* server_ssl)
 {
    int status = MESSAGE_STATUS_ERROR;
    int auth_index = 1;
+   size_t client_first_message_bare_length = 0;
+   char cfmb[128];
+   char plus_final[256];
+   char* client_final = NULL;
+   struct server* srv = NULL;
+   bool use_plus = false;
    int server_fd;
    char* salt = NULL;
    size_t salt_length = 0;
@@ -2696,7 +2895,31 @@ server_scram256(char* username, char* password, int slot, SSL* server_ssl)
 
    generate_nounce(&client_nounce);
 
-   status = pgagroal_create_auth_scram256_response(client_nounce, &sasl_response);
+   srv = &config->servers[config->connections[slot].server];
+
+   /* Offer -PLUS when the backend link is TLS, the backend advertised it, and
+    * channel_binding permits it. */
+   if (server_ssl != NULL && srv->channel_binding != CHANNEL_BINDING_DISABLED &&
+       scram_mechanism_offered(config->connections[slot].security_messages[0],
+                               config->connections[slot].security_lengths[0], "SCRAM-SHA-256-PLUS"))
+   {
+      use_plus = true;
+      pgagroal_log_debug("SCRAM: using channel binding (SCRAM-SHA-256-PLUS) for server %s", srv->name);
+   }
+   else if (srv->channel_binding == CHANNEL_BINDING_REQUIRE)
+   {
+      pgagroal_log_error("SCRAM: channel binding required but unavailable for server %s", srv->name);
+      goto error;
+   }
+
+   if (use_plus)
+   {
+      status = pgagroal_create_auth_scram256_plus_response(client_nounce, &sasl_response);
+   }
+   else
+   {
+      status = pgagroal_create_auth_scram256_response(client_nounce, &sasl_response);
+   }
    if (status != MESSAGE_STATUS_OK)
    {
       goto error;
@@ -2765,18 +2988,48 @@ server_scram256(char* username, char* password, int slot, SSL* server_ssl)
    }
 
    memset(&wo_proof[0], 0, sizeof(wo_proof));
-   pgagroal_snprintf(&wo_proof[0], sizeof(wo_proof), "c=biws,r=%s", combined_nounce);
+   if (use_plus)
+   {
+      unsigned char cbind[24 + EVP_MAX_MD_SIZE];
+      size_t cbind_length = 24;
+      size_t cbind_hash_length = 0;
+      char* cbind_b64 = NULL;
+      size_t cbind_b64_length = 0;
 
-   /* n=,r=... */
-   client_first_message_bare = config->connections[slot].security_messages[1] + 26;
+      /* cbind-input = gs2-header || tls-server-end-point(backend certificate) */
+      memcpy(cbind, "p=tls-server-end-point,,", 24);
+      if (pgagroal_tls_cert_endpoint_hash(server_ssl, true, cbind + 24, sizeof(cbind) - 24, &cbind_hash_length))
+      {
+         goto error;
+      }
+      cbind_length += cbind_hash_length;
+
+      pgagroal_base64_encode((char*)cbind, cbind_length, &cbind_b64, &cbind_b64_length);
+      pgagroal_snprintf(plus_final, sizeof(plus_final), "c=%s,r=%s", cbind_b64, combined_nounce);
+      free(cbind_b64);
+      client_final = plus_final;
+
+      pgagroal_snprintf(cfmb, sizeof(cfmb), "n=,r=%s", client_nounce);
+      client_first_message_bare = cfmb;
+      client_first_message_bare_length = strlen(cfmb);
+   }
+   else
+   {
+      pgagroal_snprintf(&wo_proof[0], sizeof(wo_proof), "c=biws,r=%s", combined_nounce);
+      client_final = &wo_proof[0];
+
+      /* n=,r=... */
+      client_first_message_bare = config->connections[slot].security_messages[1] + 26;
+      client_first_message_bare_length = config->connections[slot].security_lengths[1] - 26;
+   }
 
    /* r=...,s=...,i=4096 */
    server_first_message = config->connections[slot].security_messages[2] + 9;
 
    if (client_proof(password_prep, salt, salt_length, iteration,
-                    client_first_message_bare, config->connections[slot].security_lengths[1] - 26,
+                    client_first_message_bare, client_first_message_bare_length,
                     server_first_message, config->connections[slot].security_lengths[2] - 9,
-                    &wo_proof[0], strlen(wo_proof),
+                    client_final, strlen(client_final),
                     &proof, &proof_length))
    {
       goto error;
@@ -2784,7 +3037,7 @@ server_scram256(char* username, char* password, int slot, SSL* server_ssl)
 
    pgagroal_base64_encode((char*)proof, proof_length, &proof_base, &proof_base_length);
 
-   status = pgagroal_create_auth_scram256_continue_response(&wo_proof[0], (char*)proof_base, &sasl_continue_response);
+   status = pgagroal_create_auth_scram256_continue_response(client_final, (char*)proof_base, &sasl_continue_response);
    if (status != MESSAGE_STATUS_OK)
    {
       goto error;
@@ -2835,9 +3088,9 @@ server_scram256(char* username, char* password, int slot, SSL* server_ssl)
 
    if (server_signature(password_prep, salt, salt_length, iteration,
                         NULL, 0,
-                        client_first_message_bare, config->connections[slot].security_lengths[1] - 26,
+                        client_first_message_bare, client_first_message_bare_length,
                         server_first_message, config->connections[slot].security_lengths[2] - 9,
-                        &wo_proof[0], strlen(wo_proof),
+                        client_final, strlen(client_final),
                         &server_signature_calc, &server_signature_calc_length))
    {
       goto error;
@@ -5076,7 +5329,7 @@ auth_query_client_scram256(SSL* c_ssl, int client_fd, char* username __attribute
 
    config = (struct main_configuration*)shmem;
 
-   status = pgagroal_write_auth_scram256(c_ssl, client_fd);
+   status = pgagroal_write_auth_scram256(c_ssl, client_fd, false);
    if (status != MESSAGE_STATUS_OK)
    {
       goto error;

@@ -973,21 +973,37 @@ pgagroal_create_auth_password_response(char* password, struct message** msg)
 }
 
 int
-pgagroal_write_auth_scram256(SSL* ssl, int socket)
+pgagroal_write_auth_scram256(SSL* ssl, int socket, bool channel_binding)
 {
-   char scram[24];
+   char scram[43];
    struct message msg;
+   size_t offset;
 
    memset(&msg, 0, sizeof(struct message));
    memset(&scram, 0, sizeof(scram));
 
    scram[0] = 'R';
-   pgagroal_write_int32(&(scram[1]), 23);
    pgagroal_write_int32(&(scram[5]), 10);
-   pgagroal_write_string(&(scram[9]), "SCRAM-SHA-256");
+   offset = 9;
+
+   /* Offer channel binding first so a capable client prefers it; it is only
+    * meaningful once the frontend link is TLS. The NUL after each mechanism and
+    * the empty string terminating the list come from the zeroed buffer. */
+   if (channel_binding && ssl != NULL)
+   {
+      pgagroal_write_string(&(scram[offset]), "SCRAM-SHA-256-PLUS");
+      offset += strlen("SCRAM-SHA-256-PLUS") + 1;
+   }
+
+   pgagroal_write_string(&(scram[offset]), "SCRAM-SHA-256");
+   offset += strlen("SCRAM-SHA-256") + 1;
+
+   offset += 1;
+
+   pgagroal_write_int32(&(scram[1]), offset - 1);
 
    msg.kind = 'R';
-   msg.length = 24;
+   msg.length = offset;
    msg.data = &scram;
 
    if (ssl == NULL)
@@ -1028,6 +1044,56 @@ pgagroal_create_auth_scram256_response(char* nounce, struct message** msg)
    pgagroal_write_string(m->data + 5, "SCRAM-SHA-256");
    pgagroal_write_string(m->data + 22, " n,,n=,r=");
    pgagroal_write_string(m->data + 31, nounce);
+
+   *msg = m;
+
+   return MESSAGE_STATUS_OK;
+}
+
+int
+pgagroal_create_auth_scram256_plus_response(char* nounce, struct message** msg)
+{
+   struct message* m = NULL;
+   size_t size;
+   size_t offset;
+   char* mechanism = "SCRAM-SHA-256-PLUS";
+   char* initial = "p=tls-server-end-point,,n=,r=";
+   int ir_len;
+
+   ir_len = (int)(strlen(initial) + strlen(nounce));
+
+   /* 'p' + length + mechanism + NUL + initial-response length + initial response */
+   size = 1 + 4 + strlen(mechanism) + 1 + 4 + strlen(initial) + strlen(nounce);
+
+   m = (struct message*)malloc(sizeof(struct message));
+   if (m == NULL)
+   {
+      pgagroal_log_fatal("Couldn't allocate memory while creating auth_scram256_plus_response");
+      return MESSAGE_STATUS_ERROR;
+   }
+   m->data = calloc(1, size);
+   if (m->data == NULL)
+   {
+      pgagroal_log_fatal("Couldn't allocate memory while creating auth_scram256_plus_response");
+      free(m);
+      return MESSAGE_STATUS_ERROR;
+   }
+
+   m->kind = 'p';
+   m->length = size;
+
+   offset = 0;
+   pgagroal_write_byte(m->data + offset, 'p');
+   offset += 1;
+   pgagroal_write_int32(m->data + offset, size - 1);
+   offset += 4;
+   pgagroal_write_string(m->data + offset, mechanism);
+   offset += strlen(mechanism) + 1;
+   pgagroal_write_int32(m->data + offset, ir_len);
+   offset += 4;
+   pgagroal_write_string(m->data + offset, initial);
+   offset += strlen(initial);
+   pgagroal_write_string(m->data + offset, nounce);
 
    *msg = m;
 

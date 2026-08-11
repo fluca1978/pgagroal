@@ -227,3 +227,42 @@ cleanup:
    }
    MCTF_FINISH();
 }
+
+/*
+ * SCRAM-SHA-256-PLUS client-first (channel binding). Locks down the fragile
+ * wire layout the backend -PLUS handshake depends on: the mechanism name, the
+ * gs2 header "p=tls-server-end-point,," and the initial-response length.
+ */
+MCTF_TEST(test_scram256_plus_client_first)
+{
+   const char* nounce = "abcdefghijklmnopqrstuvwx";
+   const char* initial = "p=tls-server-end-point,,n=,r=";
+   struct message* msg = NULL;
+   char* data;
+   int status;
+
+   status = pgagroal_create_auth_scram256_plus_response((char*)nounce, &msg);
+   MCTF_ASSERT_INT_EQ(status, MESSAGE_STATUS_OK, cleanup, "builder must succeed");
+   MCTF_ASSERT(msg != NULL, cleanup, "message must be returned");
+
+   data = (char*)msg->data;
+
+   MCTF_ASSERT(msg->kind == 'p', cleanup, "kind must be 'p'");
+   MCTF_ASSERT(data[0] == 'p', cleanup, "first byte must be 'p'");
+   MCTF_ASSERT_INT_EQ(pgagroal_read_int32(data + 1), (int)(msg->length - 1), cleanup,
+                      "declared length excludes the tag byte");
+   MCTF_ASSERT(strcmp(data + 5, "SCRAM-SHA-256-PLUS") == 0, cleanup,
+               "mechanism must be SCRAM-SHA-256-PLUS");
+   MCTF_ASSERT_INT_EQ(pgagroal_read_int32(data + 24), (int)(strlen(initial) + strlen(nounce)), cleanup,
+                      "initial-response length must cover gs2 header + bare");
+   MCTF_ASSERT(memcmp(data + 28, initial, strlen(initial)) == 0, cleanup,
+               "gs2 header + client-first-bare prefix");
+   MCTF_ASSERT(memcmp(data + 28 + strlen(initial), nounce, strlen(nounce)) == 0, cleanup,
+               "client nonce placement");
+   MCTF_ASSERT_INT_EQ((int)msg->length, (int)(1 + 4 + 18 + 1 + 4 + strlen(initial) + strlen(nounce)), cleanup,
+                      "total message length");
+
+cleanup:
+   pgagroal_free_message(msg);
+   MCTF_FINISH();
+}

@@ -1529,3 +1529,76 @@ pgagroal_tls_own(struct tls* tls)
 
    return PGAGROAL_TLS_OK;
 }
+
+int
+pgagroal_tls_cert_endpoint_hash(SSL* ssl, bool peer, unsigned char* out, size_t cap, size_t* out_len)
+{
+   X509* cert = NULL;
+   const EVP_MD* md = NULL;
+   unsigned char hash[EVP_MAX_MD_SIZE];
+   unsigned int len = 0;
+   int algo_nid = 0;
+   int result = PGAGROAL_TLS_ERROR;
+
+   if (out_len != NULL)
+   {
+      *out_len = 0;
+   }
+   if (ssl == NULL || out == NULL)
+   {
+      return PGAGROAL_TLS_ERROR;
+   }
+
+   /* tls-server-end-point binds to the server's certificate: our own when we
+    * are the TLS server, the peer's when we are the client. */
+   cert = peer ? SSL_get_peer_certificate(ssl) : SSL_get_certificate(ssl);
+   if (cert == NULL)
+   {
+      goto error;
+   }
+
+   /* RFC 5929 4.1: hash with the certificate signature's hash, except MD5 and
+    * SHA-1 which are upgraded to SHA-256. */
+   if (!X509_get_signature_info(cert, &algo_nid, NULL, NULL, NULL))
+   {
+      goto error;
+   }
+   if (algo_nid == NID_md5 || algo_nid == NID_sha1)
+   {
+      md = EVP_sha256();
+   }
+   else
+   {
+      md = EVP_get_digestbynid(algo_nid);
+   }
+   if (md == NULL)
+   {
+      goto error;
+   }
+
+   if (!X509_digest(cert, md, hash, &len))
+   {
+      goto error;
+   }
+   if ((size_t)len > cap)
+   {
+      goto error;
+   }
+
+   memcpy(out, hash, len);
+   if (out_len != NULL)
+   {
+      *out_len = (size_t)len;
+   }
+   result = PGAGROAL_TLS_OK;
+
+error:
+
+   /* SSL_get_peer_certificate increments the refcount; SSL_get_certificate does not. */
+   if (peer && cert != NULL)
+   {
+      X509_free(cert);
+   }
+
+   return result;
+}

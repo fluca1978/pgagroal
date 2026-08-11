@@ -286,10 +286,11 @@ pgagroal_create_auth_password_response(char* password, struct message** msg);
  * Write an auth SCRAM-SHA-256 message
  * @param ssl The SSL struct
  * @param socket The socket descriptor
+ * @param channel_binding Advertise SCRAM-SHA-256-PLUS as well (requires a TLS frontend)
  * @return 0 upon success, otherwise 1
  */
 int
-pgagroal_write_auth_scram256(SSL* ssl, int socket);
+pgagroal_write_auth_scram256(SSL* ssl, int socket, bool channel_binding);
 
 /**
  * Create an auth SCRAM-SHA-256 response message
@@ -299,6 +300,15 @@ pgagroal_write_auth_scram256(SSL* ssl, int socket);
  */
 int
 pgagroal_create_auth_scram256_response(char* nounce, struct message** msg);
+
+/**
+ * Create an auth SCRAM-SHA-256-PLUS response message (tls-server-end-point channel binding)
+ * @param nounce The nounce
+ * @param msg The resulting message
+ * @return 0 upon success, otherwise 1
+ */
+int
+pgagroal_create_auth_scram256_plus_response(char* nounce, struct message** msg);
 
 /**
  * Create an auth SCRAM-SHA-256/Continue message
