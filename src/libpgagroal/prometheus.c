@@ -3563,8 +3563,8 @@ parse_certificate_file(const char* cert_path, struct certificate_info* cert_info
    X509* cert = NULL;
    const X509_NAME* subject_name = NULL;
    const X509_NAME* issuer_name = NULL;
-   ASN1_TIME* not_after = NULL;
-   ASN1_TIME* not_before_asn1 = NULL;
+   const ASN1_TIME* not_after = NULL;
+   const ASN1_TIME* not_before_asn1 = NULL;
    ASN1_INTEGER* serial = NULL;
    EVP_PKEY* pkey = NULL;
    struct tm tm_time;
@@ -3606,7 +3606,7 @@ parse_certificate_file(const char* cert_path, struct certificate_info* cert_info
    }
 
    // Get expiration time
-   not_after = X509_get_notAfter(cert);
+   not_after = X509_get0_notAfter(cert);
    if (not_after)
    {
       memset(&tm_time, 0, sizeof(tm_time));
@@ -3618,7 +3618,7 @@ parse_certificate_file(const char* cert_path, struct certificate_info* cert_info
    }
 
    // Get not before time
-   not_before_asn1 = X509_get_notBefore(cert);
+   not_before_asn1 = X509_get0_notBefore(cert);
    if (not_before_asn1)
    {
       memset(&tm_time, 0, sizeof(tm_time));

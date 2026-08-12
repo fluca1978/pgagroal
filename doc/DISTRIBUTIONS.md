@@ -6,7 +6,7 @@
 * [cmake](https://cmake.org)
 * [GNU make](https://www.gnu.org/software/make/) or BSD `make`
 * [libev](http://software.schmorp.de/pkg/libev.html)
-* [OpenSSL](http://www.openssl.org/)
+* [OpenSSL 3.0+](http://www.openssl.org/)
 * [rst2man](https://docutils.sourceforge.io/)
 * [libatomic](https://gcc.gnu.org/wiki/Atomic)
 * [Doxygen](https://doxygen.nl/index.html)

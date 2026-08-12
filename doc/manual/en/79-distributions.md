@@ -12,7 +12,7 @@ This chapter provides installation instructions for different operating systems 
 * [cmake][cmake]
 * [GNU make][make] or BSD `make`
 * [libev][libev]
-* [OpenSSL][openssl]
+* [OpenSSL 3.0+][openssl]
 * [rst2man][rst2man]
 * [libatomic](https://gcc.gnu.org/wiki/Atomic)
 * [Doxygen](https://doxygen.nl/index.html)

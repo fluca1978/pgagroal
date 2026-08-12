@@ -5827,9 +5827,9 @@ pgagroal_extract_cert_identity(SSL* ssl)
       return NULL;
    }
 
-   // Get peer certificate - this is a borrowed reference in OpenSSL 1.0.2+
+   // Get peer certificate (owned reference: refcount incremented, freed with X509_free below)
    // Returns NULL if no certificate was presented or verification failed
-   cert = SSL_get_peer_certificate(ssl);
+   cert = SSL_get1_peer_certificate(ssl);
    if (cert == NULL)
    {
       pgagroal_log_debug("pgagroal_extract_cert_identity: No peer certificate found");
@@ -5948,7 +5948,7 @@ pgagroal_extract_cert_identity(SSL* ssl)
       }
    }
 
-   // Free the certificate (SSL_get_peer_certificate increments reference count)
+   // Free the certificate (SSL_get1_peer_certificate incremented the reference count)
    X509_free(cert);
 
    if (identity == NULL)
