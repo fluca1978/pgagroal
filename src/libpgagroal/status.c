@@ -196,6 +196,7 @@ status_details(bool details, struct json* response)
    pgagroal_json_create(&servers);
    pgagroal_json_create(&standbys);
 
+   int number_of_primary = 0;
    FOREACH_VALID_SERVER
    {
       struct json* js = NULL;
@@ -217,6 +218,10 @@ status_details(bool details, struct json* response)
 
       pgagroal_server_get_connectivity_info(i, &srv_status, &srv_primary, &behind_bytes);
 
+      if (pgagroal_compare_string(srv_primary, "Yes"))
+      {
+         number_of_primary++;
+      }
       pgagroal_json_create(&js);
 
       pgagroal_json_put(js, MANAGEMENT_ARGUMENT_SERVER, (uintptr_t)config->servers[i].name, ValueString);
@@ -260,6 +265,11 @@ status_details(bool details, struct json* response)
       }
    }
 
+   if (number_of_primary > 1)
+   {
+      pgagroal_log_warn("Multiple primary servers detected (%d)", number_of_primary);
+      pgagroal_json_put(response, MANAGEMENT_ARGUMENT_SPLIT_BRAIN, (uintptr_t)"Yes", ValueString);
+   }
    pgagroal_json_put(response, MANAGEMENT_ARGUMENT_SERVERS, (uintptr_t)servers, ValueJSON);
    pgagroal_json_put(response, MANAGEMENT_ARGUMENT_STANDBYS, (uintptr_t)standbys, ValueJSON);
 

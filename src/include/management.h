@@ -119,6 +119,7 @@ extern "C" {
 #define MANAGEMENT_ARGUMENT_MODE                "Mode"
 #define MANAGEMENT_ARGUMENT_TIMEOUT             "Timeout"
 #define MANAGEMENT_ARGUMENT_NUMBER_OF_SERVERS   "NumberOfServers"
+#define MANAGEMENT_ARGUMENT_SPLIT_BRAIN         "SplitBrain"
 #define MANAGEMENT_ARGUMENT_OUTPUT              "Output"
 #define MANAGEMENT_ARGUMENT_PASSWORD            "Password"
 #define MANAGEMENT_ARGUMENT_PID                 "PID"
