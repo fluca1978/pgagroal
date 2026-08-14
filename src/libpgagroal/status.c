@@ -157,6 +157,7 @@ status_details(bool details, struct json* response)
    int active = 0;
    int total = 0;
    struct json* servers = NULL;
+   struct json* standbys = NULL;
    struct main_configuration* config;
 
    config = (struct main_configuration*)shmem;
@@ -193,6 +194,7 @@ status_details(bool details, struct json* response)
    pgagroal_json_put(response, MANAGEMENT_ARGUMENT_NUMBER_OF_SERVERS, (uintptr_t)config->number_of_servers, ValueInt32);
 
    pgagroal_json_create(&servers);
+   pgagroal_json_create(&standbys);
 
    FOREACH_VALID_SERVER
    {
@@ -230,9 +232,36 @@ status_details(bool details, struct json* response)
          pgagroal_json_put(js, MANAGEMENT_ARGUMENT_BEHIND, (uintptr_t)behind_bytes, ValueInt64);
 
       pgagroal_json_put(servers, config->servers[i].name, (uintptr_t)js, ValueJSON);
+
+      if (srv_primary != NULL && pgagroal_compare_string(srv_primary, "No"))
+      {
+         char rep_status[64] = {0};
+         char slot_name[64] = {0};
+         char sender_host[MISC_LENGTH] = {0};
+         char sender_port[16] = {0};
+
+         int wal_result = pgagroal_server_get_wal_receiver_status(i,
+                                                                  rep_status, sizeof(rep_status),
+                                                                  slot_name, sizeof(slot_name),
+                                                                  sender_host, sizeof(sender_host),
+                                                                  sender_port, sizeof(sender_port));
+         struct json* standby_js = NULL;
+         pgagroal_json_create(&standby_js);
+         if (wal_result == 0)
+         {
+            bool is_streaming = pgagroal_compare_string(rep_status, "streaming");
+            pgagroal_json_put(standby_js, MANAGEMENT_ARGUMENT_STREAMING, (uintptr_t)is_streaming, ValueBool);
+            pgagroal_json_put(standby_js, MANAGEMENT_ARGUMENT_WAL_RECEIVER_STATUS, (uintptr_t)rep_status, ValueString);
+            pgagroal_json_put(standby_js, MANAGEMENT_ARGUMENT_SLOT_NAME, (uintptr_t)slot_name, ValueString);
+            pgagroal_json_put(standby_js, MANAGEMENT_ARGUMENT_PRIMARY_HOST, (uintptr_t)sender_host, ValueString);
+            pgagroal_json_put(standby_js, MANAGEMENT_ARGUMENT_PRIMARY_PORT, (uintptr_t)sender_port, ValueString);
+         }
+         pgagroal_json_put(standbys, config->servers[i].name, (uintptr_t)standby_js, ValueJSON);
+      }
    }
 
    pgagroal_json_put(response, MANAGEMENT_ARGUMENT_SERVERS, (uintptr_t)servers, ValueJSON);
+   pgagroal_json_put(response, MANAGEMENT_ARGUMENT_STANDBYS, (uintptr_t)standbys, ValueJSON);
 
    /* Show invalid servers separately */
    {

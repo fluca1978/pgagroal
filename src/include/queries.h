@@ -57,6 +57,25 @@ const char*
 pgagroal_queries_replication_lag_bytes(void);
 
 /**
+ * SQL for replica status (multiple columns).
+ * @return Static query string (do not free)
+ */
+const char*
+pgagroal_queries_wal_receiver_status(void);
+
+/**
+ * Read PostgreSQL wire-protocol messages from fd until ReadyForQuery, and fill values
+ *
+ * @param fd Open server connection after a query was sent
+ * @param expected_cols The exact number of columns expected in the result
+ * @param values Array of pointers to output buffers
+ * @param value_sizes Array containing the maximum size for each output buffer
+ * @return 0 upon success, otherwise 1
+ */
+int
+pgagroal_read_query_multiple_columns_text(int fd, int expected_cols, char** values, size_t* value_sizes);
+
+/**
  * Read PostgreSQL wire-protocol messages from fd until ReadyForQuery, and fill
  * @a value with the text of the first column of the first DataRow ('D').
  *

@@ -727,6 +727,73 @@ done:
 }
 
 int
+pgagroal_server_get_wal_receiver_status(int server,
+                                        char* rep_status, size_t status_size,
+                                        char* slot_name, size_t slot_size,
+                                        char* sender_host, size_t host_size,
+                                        char* sender_port, size_t port_size)
+{
+   int fd = -1;
+   struct main_configuration* config = (struct main_configuration*)shmem;
+   char* cols[] = {rep_status, slot_name, sender_host, sender_port};
+   size_t sizes[] = {status_size, slot_size, host_size, port_size};
+
+   if (rep_status == NULL || slot_name == NULL || sender_host == NULL || sender_port == NULL)
+   {
+      return 1;
+   }
+
+   rep_status[0] = '\0';
+   slot_name[0] = '\0';
+   sender_host[0] = '\0';
+   sender_port[0] = '\0';
+
+   if (server < 0 || server >= config->number_of_servers)
+   {
+      return 1;
+   }
+
+   if (strlen(config->health_check_user) == 0)
+   {
+      pgagroal_log_debug("ping/status: health_check_user is not configured, cannot check WAL receiver status");
+      return 1;
+   }
+
+   if (pgagroal_server_query_execute(server,
+                                     config->health_check_user,
+                                     config->health_check_user,
+                                     (char*)pgagroal_queries_wal_receiver_status(),
+                                     MAX(1, (int)pgagroal_time_convert(config->health_check_timeout, FORMAT_TIME_S)),
+                                     NULL, &fd))
+   {
+      pgagroal_log_debug("Failed to execute WAL receiver query for server %d", server);
+      goto error;
+   }
+
+   if (pgagroal_read_query_multiple_columns_text(fd, 4, cols, sizes))
+   {
+      pgagroal_log_debug("Failed to read WAL receiver status columns for server %d", server);
+      goto error;
+   }
+
+   if (fd != -1)
+   {
+      (void)pgagroal_write_terminate(NULL, fd);
+      pgagroal_disconnect(fd);
+   }
+
+   return 0;
+error:
+   if (fd != -1)
+   {
+      (void)pgagroal_write_terminate(NULL, fd);
+      pgagroal_disconnect(fd);
+   }
+
+   return 1;
+}
+
+int
 pgagroal_get_primary(int* server)
 {
    int primary;

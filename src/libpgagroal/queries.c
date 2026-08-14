@@ -50,6 +50,116 @@ pgagroal_queries_replication_lag_bytes(void)
    return "SELECT COALESCE(pg_wal_lsn_diff(pg_last_wal_receive_lsn(), pg_last_wal_replay_lsn()), 0)::bigint;";
 }
 
+const char*
+pgagroal_queries_wal_receiver_status(void)
+{
+   return "SELECT status, slot_name, sender_host, sender_port FROM pg_stat_wal_receiver;";
+}
+
+int
+pgagroal_read_query_multiple_columns_text(int fd, int expected_cols, char** values, size_t* value_sizes)
+{
+   int status;
+   int offset = 0;
+   bool has_value = false;
+   struct message* msg = NULL;
+
+   if (values == NULL || value_sizes == NULL || expected_cols <= 0)
+   {
+      return 1;
+   }
+
+   for (int i = 0; i < expected_cols; i++)
+   {
+      if (values[i] != NULL && value_sizes[i] > 0)
+      {
+         values[i][0] = '\0';
+      }
+      else
+      {
+         return 1;
+      }
+   }
+
+   while (true)
+   {
+      status = pgagroal_read_timeout_message(NULL, fd, 5, &msg);
+      if (status != MESSAGE_STATUS_OK || msg == NULL)
+      {
+         goto error;
+      }
+
+      offset = 0;
+      while (offset < msg->length)
+      {
+         char kind = pgagroal_read_byte(msg->data + offset);
+         int len = pgagroal_read_int32(msg->data + offset + 1);
+
+         if (len <= 0)
+            goto error;
+
+         if (kind == 'D')
+         {
+            int dr_offset = offset + 5;
+            int num_cols = pgagroal_read_int16(msg->data + dr_offset);
+            dr_offset += 2;
+
+            if (num_cols == expected_cols)
+            {
+               for (int i = 0; i < num_cols; i++)
+               {
+                  int col_len = pgagroal_read_int32(msg->data + dr_offset);
+                  dr_offset += 4;
+
+                  if (col_len <= 0)
+                  {
+                     if (values[i] != NULL && value_sizes[i] > 0)
+                     {
+                        values[i][0] = '\0';
+                     }
+                  }
+                  else
+                  {
+                     if (values[i] != NULL && (size_t)col_len < value_sizes[i])
+                     {
+                        memcpy(values[i], msg->data + dr_offset, (size_t)col_len);
+                        values[i][col_len] = '\0';
+                     }
+                     else
+                     {
+                        goto error;
+                     }
+                     dr_offset += col_len;
+                  }
+               }
+               has_value = true;
+            }
+            else
+            {
+               goto error;
+            }
+         }
+         else if (kind == 'E')
+         {
+            goto error;
+         }
+         else if (kind == 'Z')
+         {
+            pgagroal_clear_message(msg);
+            return has_value ? 0 : 1;
+         }
+
+         offset += 1 + len;
+      }
+
+      pgagroal_clear_message(msg);
+      msg = NULL;
+   }
+
+error:
+   pgagroal_clear_message(msg);
+   return 1;
+}
 int
 pgagroal_read_query_first_column_text(int fd, char* value, size_t value_size)
 {

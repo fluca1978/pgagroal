@@ -129,6 +129,26 @@ int
 pgagroal_server_get_connectivity_info(int server, char** status, char** primary, int64_t* behind_bytes);
 
 /**
+ * Get the WAL receiver status and streaming details for a configured standby server.
+ *
+ * @param server        The server index into config->servers[]
+ * @param rep_status    Output: the replication status (e.g., "streaming")
+ * @param status_size   The maximum size of the rep_status buffer
+ * @param slot_name     Output: the replication slot name
+ * @param slot_size     The maximum size of the slot_name buffer
+ * @param sender_host   Output: the primary host the standby is streaming from
+ * @param host_size     The maximum size of the sender_host buffer
+ * @param sender_port   Output: the primary port the standby is streaming from
+ * @param port_size     The maximum size of the sender_port buffer
+ * @return 0 upon success, otherwise 1
+ */
+int
+pgagroal_server_get_wal_receiver_status(int server,
+                                        char* rep_status, size_t status_size,
+                                        char* slot_name, size_t slot_size,
+                                        char* sender_host, size_t host_size,
+                                        char* sender_port, size_t port_size);
+/**
  * Check if the server is a primary server
  * @param server The server index
  * @return true if primary, false otherwise

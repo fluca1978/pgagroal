@@ -137,7 +137,12 @@ extern "C" {
 #define MANAGEMENT_ARGUMENT_TIMESTAMP           "Timestamp"
 #define MANAGEMENT_ARGUMENT_TOTAL_CONNECTIONS   "TotalConnections"
 #define MANAGEMENT_ARGUMENT_USERNAME            "Username"
-
+#define MANAGEMENT_ARGUMENT_STANDBYS            "Standbys"
+#define MANAGEMENT_ARGUMENT_STREAMING           "Streaming"
+#define MANAGEMENT_ARGUMENT_WAL_RECEIVER_STATUS "WALReceiverStatus"
+#define MANAGEMENT_ARGUMENT_SLOT_NAME           "SlotName"
+#define MANAGEMENT_ARGUMENT_PRIMARY_HOST        "PrimaryHost"
+#define MANAGEMENT_ARGUMENT_PRIMARY_PORT        "PrimaryPort"
 /**
  * Management error
  */
