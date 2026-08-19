@@ -150,6 +150,10 @@ extern "C" {
 #define SERVER_HEALTH_UP               1
 #define SERVER_HEALTH_DOWN             2
 
+#define SERVER_STREAMING_PRIMARY       -1
+#define SERVER_STREAMING_NO            0
+#define SERVER_STREAMING_YES           1
+
 #define HEALTH_CHECK_AUTH_UNKNOWN      0
 #define HEALTH_CHECK_AUTH_TRUST        1
 #define HEALTH_CHECK_AUTH_SCRAM        3
@@ -402,6 +406,7 @@ struct server
    unsigned char channel_binding; /**< SCRAM channel binding (CHANNEL_BINDING_*) */
    atomic_schar state;            /**< The state of the server */
    atomic_schar health_state;     /**< The health state of the server */
+   atomic_int streaming_state;    /**< The streaming state of the server SERVER_STREAMING_PRIMARY/NO/YES */
    unsigned int failures;         /**< The number of failures */
    atomic_schar auth_type;        /**< The authentication type used for health check */
    int lineno;                    /**< The line number within the configuration file */

@@ -1485,6 +1485,18 @@ home_page(SSL* client_ssl, int client_fd)
    data = pgagroal_append(data, "      </tr>\n");
    data = pgagroal_append(data, "    </tbody>\n");
    data = pgagroal_append(data, "  </table>\n");
+   data = pgagroal_append(data, "  <h2>pgagroal_server_streaming</h2>\n");
+   data = pgagroal_append(data, "  <p>\n");
+   data = pgagroal_append(data, "   Whether a standby is actively streaming from its primary (-1=primary, 0=no, 1=yes)\n");
+   data = pgagroal_append(data, "  </p>\n");
+   data = pgagroal_append(data, "  <table>\n");
+   data = pgagroal_append(data, "    <tbody>\n");
+   data = pgagroal_append(data, "      <tr>\n");
+   data = pgagroal_append(data, "        <td>name</td>\n");
+   data = pgagroal_append(data, "        <td>The name of the server</td>\n");
+   data = pgagroal_append(data, "      </tr>\n");
+   data = pgagroal_append(data, "    </tbody>\n");
+   data = pgagroal_append(data, "  </table>\n");
    data = pgagroal_append(data, "  <h2>pgagroal_failed_servers</h2>\n");
    data = pgagroal_append(data, "  <p>\n");
    data = pgagroal_append(data, "   The number of failed servers. Only set if failover is enabled\n");
@@ -2375,6 +2387,26 @@ general_information(prometheus_metrics_container_t* container)
    if (data != NULL)
    {
       add_metric_to_art(container->general_metrics, "pgagroal_server_error", data, NULL, NULL, 0);
+      free(data);
+      data = NULL;
+   }
+
+   data = pgagroal_append(data, "#HELP pgagroal_server_streaming Whether a standby is actively streaming from its primary (-1=primary, 0=no, 1=yes)\n");
+   data = pgagroal_append(data, "#TYPE pgagroal_server_streaming gauge\n");
+   FOREACH_VALID_SERVER
+   {
+      int streaming_state = atomic_load(&config->servers[i].streaming_state);
+
+      data = pgagroal_append(data, "pgagroal_server_streaming{");
+      data = pgagroal_append(data, "name=\"");
+      data = pgagroal_append(data, config->servers[i].name);
+      data = pgagroal_append(data, "\"} ");
+      data = pgagroal_append_int(data, streaming_state);
+      data = pgagroal_append(data, "\n");
+   }
+   if (data != NULL)
+   {
+      add_metric_to_art(container->general_metrics, "pgagroal_server_streaming", data, NULL, NULL, 0);
       free(data);
       data = NULL;
    }

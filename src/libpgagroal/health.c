@@ -201,6 +201,48 @@ health_check_loop(void)
                atomic_store(&config->servers[i].health_state, SERVER_HEALTH_DOWN);
             }
          }
+
+         int current_state = atomic_load(&config->servers[i].state);
+         if (current_state == SERVER_PRIMARY || current_state == SERVER_NOTINIT_PRIMARY)
+         {
+            atomic_store(&config->servers[i].streaming_state, SERVER_STREAMING_PRIMARY);
+         }
+         else if (up)
+         {
+            char rep_status[64] = {0};
+            char slot_name[64] = {0};
+            char sender_host[MISC_LENGTH] = {0};
+            char sender_port[16] = {0};
+
+            int wal_result = pgagroal_server_get_wal_receiver_status(i,
+                                                                     rep_status, sizeof(rep_status),
+                                                                     slot_name, sizeof(slot_name),
+                                                                     sender_host, sizeof(sender_host),
+                                                                     sender_port, sizeof(sender_port));
+            bool is_streaming = pgagroal_compare_string(rep_status, "streaming");
+
+            if (wal_result == 0)
+            {
+               if (is_streaming)
+               {
+                  atomic_store(&config->servers[i].streaming_state, SERVER_STREAMING_YES);
+               }
+               else
+               {
+                  atomic_store(&config->servers[i].streaming_state, SERVER_STREAMING_NO);
+               }
+            }
+            else
+            {
+               pgagroal_log_debug("server %d failed to receive wal_result, setting streaming state to NO", i);
+               atomic_store(&config->servers[i].streaming_state, SERVER_STREAMING_NO);
+            }
+         }
+         else
+         {
+            pgagroal_log_debug("server %d not up defaulting streaming state to No", i);
+            atomic_store(&config->servers[i].streaming_state, SERVER_STREAMING_NO);
+         }
       }
    }
 
