@@ -1361,9 +1361,18 @@ pgagroal_prefill(bool initial)
                pgagroal_log_warn("Unknown user '%s' for limit entry (%d)", config->limits[i].username, i + 1);
             }
          }
+         else if (!strcmp("all", config->limits[i].database))
+         {
+            pgagroal_log_warn("Cannot perform prefill for database '%s' at limit entry %d (row %d)", config->limits[i].database,
+                              i + 1,
+                              config->limits[i].lineno);
+         }
+
          else
          {
-            pgagroal_log_warn("Limit entry (%d) with invalid definition", i + 1);
+            pgagroal_log_warn("Limit entry %d with invalid definition at row %d",
+                              i + 1,
+                              config->limits[i].lineno);
          }
       }
    }
