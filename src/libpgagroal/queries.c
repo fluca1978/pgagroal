@@ -35,7 +35,7 @@
 const char*
 pgagroal_queries_system_identifier(void)
 {
-   return "SELECT system_identifier, pg_control_version FROM pg_control_system()";
+   return "SELECT system_identifier, current_setting( 'server_version_num' ) FROM pg_control_system()";
 }
 
 const char*

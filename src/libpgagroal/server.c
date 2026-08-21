@@ -563,7 +563,7 @@ query_system_identifier(int server_idx, char* identifier, size_t id_size, int* p
                }
             }
 
-            /* Parse pg_control_version (second column) */
+            /* Parse 'server_version_num' (second column) */
             if (num_cols >= 2 && pg_version != NULL)
             {
                int col_len2 = pgagroal_read_int32(msg->data + dr_offset);
@@ -576,6 +576,10 @@ query_system_identifier(int server_idx, char* identifier, size_t id_size, int* p
                   memcpy(ver_buf, msg->data + dr_offset, copy_len);
                   ver_buf[copy_len] = '\0';
                   *pg_version = atoi(ver_buf);
+                  if (*pg_version)
+                  {
+                     *pg_version /= 100;
+                  }
                }
             }
          }
