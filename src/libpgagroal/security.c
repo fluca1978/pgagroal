@@ -5255,8 +5255,20 @@ auth_query_get_password(int socket, SSL* server_ssl, char* username, char* datab
       goto error;
    }
 
+   if (dmsg->length < 11)
+   {
+      /* Below the 1 byte kind + 4 byte length + 6 byte fixed header that
+       * pgagroal_extract_message() already copied. dmsg->length - 11 would
+       * be negative and, once converted to size_t below, an enormous value. */
+      goto error;
+   }
+
    result_size = dmsg->length - 11 + 1;
    result = (char*)calloc(1, result_size);
+   if (result == NULL)
+   {
+      goto error;
+   }
    memcpy(result, dmsg->data + 11, dmsg->length - 11);
 
    *password = result;
@@ -5270,17 +5282,17 @@ auth_query_get_password(int socket, SSL* server_ssl, char* username, char* datab
 error:
    pgagroal_log_trace("auth_query_get_password: socket (%d) status (%d)", socket, status);
 
-   if (tmsg->kind == 'E')
+   /* tmsg is still NULL if the write above failed, so this has to be
+    * guarded rather than assumed set just because the label was reached. */
+   if (tmsg != NULL && tmsg->kind == 'E')
    {
       char* error = NULL;
 
-      if (pgagroal_extract_error_message(tmsg, &error))
+      if (!pgagroal_extract_error_message(tmsg, &error))
       {
-         goto error;
+         pgagroal_log_error("%s in %s", error, database);
+         free(error);
       }
-
-      pgagroal_log_error("%s in %s", error, database);
-      free(error);
    }
 
    free(aq);
