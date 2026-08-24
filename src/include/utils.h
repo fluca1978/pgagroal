@@ -715,6 +715,31 @@ pgagroal_time_format(pgagroal_time_t t, enum pgagroal_time_format_t fmt, char** 
 int
 pgagroal_parse_seconds(const char* str, int64_t* out_seconds);
 
+/**
+ * Utility function to understand if a given username
+ * belongs to a list of restricted values, that 
+ * should not be used in configuration nor in authentication.
+ *
+ * @param username the username to check
+ * @returns true if the username is not empty and belongs to a 
+ * list of restricted values, false if it does not belong to the list
+ * or if it is NULL
+ */
+bool
+pgagroal_is_username_reserved(char* username);
+
+/**
+ * Utility function to understand if a given database name
+ * is restricted.
+ *
+ * @param database the database name
+ * @returns true if the database name is not null and belongs
+ * to a list of restricted database names, false if it does not
+ * belong or it is empty.
+ */
+bool
+pgagroal_is_database_reserved(char* database);
+
 #ifdef __cplusplus
 }
 #endif

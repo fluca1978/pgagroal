@@ -1292,6 +1292,19 @@ pgagroal_prefill(bool initial)
 
       if (size > 0)
       {
+         // do not perform prefil if
+         // - the database is a reserved word
+         // - the username is reserved
+         if (pgagroal_is_database_reserved(config->limits[i].database) || pgagroal_is_username_reserved(config->limits[i].username))
+         {
+            pgagroal_log_warn("Cannot perform prefill for database '%s' user '%s' at limit entry %d (row %d)",
+                              config->limits[i].database,
+                              config->limits[i].username,
+                              i + 1,
+                              config->limits[i].lineno);
+            continue;
+         }
+
          if (strcmp("all", config->limits[i].database) && strcmp("all", config->limits[i].username))
          {
             int user = -1;
@@ -1361,13 +1374,6 @@ pgagroal_prefill(bool initial)
                pgagroal_log_warn("Unknown user '%s' for limit entry (%d)", config->limits[i].username, i + 1);
             }
          }
-         else if (!strcmp("all", config->limits[i].database))
-         {
-            pgagroal_log_warn("Cannot perform prefill for database '%s' at limit entry %d (row %d)", config->limits[i].database,
-                              i + 1,
-                              config->limits[i].lineno);
-         }
-
          else
          {
             pgagroal_log_warn("Limit entry %d with invalid definition at row %d",

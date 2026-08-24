@@ -2267,3 +2267,53 @@ pgagroal_cleanse(void* data, size_t size)
       OPENSSL_cleanse(data, size);
    }
 }
+
+bool
+pgagroal_is_username_reserved(char* username)
+{
+   char* restricted_usernames[] = {"all", "sameuser"};
+   int i;
+   size_t count;
+
+   if (username == NULL || strlen(username) <= 0)
+   {
+      return false;
+   }
+
+   count = sizeof restricted_usernames / sizeof restricted_usernames[0];
+
+   for (i = 0; i < count; i++)
+   {
+      if (pgagroal_compare_string(username, restricted_usernames[i]))
+      {
+         return true;
+      }
+   }
+
+   return false;
+}
+
+bool
+pgagroal_is_database_reserved(char* database)
+{
+   char* restricted_databases[] = {"all", "replication"};
+   int i;
+   size_t count;
+
+   if (database == NULL || strlen(database) <= 0)
+   {
+      return false;
+   }
+
+   count = sizeof restricted_databases / sizeof restricted_databases[0];
+
+   for (i = 0; i < count; i++)
+   {
+      if (pgagroal_compare_string(database, restricted_databases[i]))
+      {
+         return true;
+      }
+   }
+
+   return false;
+}

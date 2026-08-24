@@ -1493,7 +1493,7 @@ pgagroal_read_limit_configuration(void* shm, char* filename)
             }
             else
             {
-               warnx("Invalid LIMIT entry /%s:%d)", config->limit_path, lineno);
+               warnx("Invalid LIMIT entry %s:%d)", config->limit_path, lineno);
             }
 
             free(database);
@@ -3185,12 +3185,11 @@ extract_limit(char* str, int server_max, char** database, char** user, int* max_
       // Split to check database name part before '='
       *alias_start = '\0';
 
-      // Check if the database name part is "all"
-      if (!strcasecmp("all", db_part))
+      /* avoid considering aliases on a restricted name database */
+      if (pgagroal_is_database_reserved(db_part))
       {
-         // This is invalid: "all" cannot have aliases
-         pgagroal_log_fatal("Database 'all' cannot have aliases. Invalid configuration: '%s'", str);
-         pgagroal_log_fatal("Pgagroal_Database Configuration is invalid. Exiting.");
+         // This is invalid: "all" and restricted databases cannot have aliases
+         pgagroal_log_fatal("database '%s' cannot have aliases. Invalid configuration: '%s'", db_part, str);
          free(db_part);
          exit(1);
       }
@@ -3200,7 +3199,7 @@ extract_limit(char* str, int server_max, char** database, char** user, int* max_
    }
 
    // Check if it's "all" - if so, don't parse for aliases
-   if (!strcasecmp("all", db_part))
+   if (pgagroal_is_database_reserved(db_part))
    {
       *database = strdup(db_part);
       if (!*database)
@@ -3248,7 +3247,7 @@ extract_limit(char* str, int server_max, char** database, char** user, int* max_
 
                if (strlen(token) > 0)
                {
-                  total_aliases_found++; // ← Count every valid alias found
+                  total_aliases_found++; //  Count every valid alias found
                   //Ensure alias length doesn't exceed MAX_DATABASE_LENGTH - 1
                   if (*aliases_count < MAX_ALIASES)
                   {
@@ -3259,6 +3258,13 @@ extract_limit(char* str, int server_max, char** database, char** user, int* max_
                         pgagroal_log_fatal("Server configuration is invalid. Exiting.");
                         free(db_part);
                         free(alias_copy);
+                        exit(1);
+                     }
+
+                     /* avoid reserved words databases */
+                     if (pgagroal_is_database_reserved(token))
+                     {
+                        pgagroal_log_fatal("Cannot use alias '%s' on entry %s", token, str);
                         exit(1);
                      }
 

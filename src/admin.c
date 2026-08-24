@@ -250,6 +250,17 @@ main(int argc, char** argv)
       goto error;
    }
 
+   /*
+    * if the user has specified a username via the -u flag, better
+    * check _also_ here if it is restricted and then exit
+    * instead of asking via a prompt for a good username
+    */
+   if (pgagroal_is_username_reserved(username))
+   {
+      warnx("Username <%s> is a reserved word, cannot use it!", username);
+      goto error;
+   }
+
    // if here, the action is understood, but we need
    // the file to operate onto!
    // Therefore, if the user did not specify any config file
@@ -664,6 +675,13 @@ username:
       goto username;
    }
 
+   /* check the username is not restricted */
+   if (pgagroal_is_username_reserved(username))
+   {
+      warnx("Username <%s> is a reserved word, cannot use it!", username);
+      goto username;
+   }
+
    /* Verify */
 #ifdef HAVE_FREEBSD
    fseek(users_file, 0, SEEK_SET);
@@ -1006,6 +1024,13 @@ username:
       goto username;
    }
 
+   /* check the username is not restricted */
+   if (pgagroal_is_username_reserved(username))
+   {
+      warnx("Username <%s> is a reserved word, cannot use it!", username);
+      goto username;
+   }
+
    /* Update */
    while (fgets(line, sizeof(line), users_file))
    {
@@ -1327,6 +1352,13 @@ username:
 
    if (username == NULL || strlen(username) == 0)
    {
+      goto username;
+   }
+
+   /* check the username is not restricted */
+   if (pgagroal_is_username_reserved(username))
+   {
+      warnx("Username <%s> is a reserved word, cannot use it!", username);
       goto username;
    }
 
