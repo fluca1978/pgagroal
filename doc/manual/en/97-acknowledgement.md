@@ -49,6 +49,7 @@ Rohan Mishra <kmrrohan29@gmail.com>
 youssef-joe <joe92228@gmail.com>
 Mohammad El-Shennawy <mohamedwork216@gmail.com>
 Finn Rayk Gartner <finn.gartner@canonical.com>
+R Sai Pranav <rajasaipranav0@gmail.com>
 ```
 
 ## Committers
@@ -59,7 +60,6 @@ Luca Ferrari <fluca1978@gmail.com>
 Haoran Zhang <andrewzhr9911@gmail.com>
 Bassam Adnan <mailbassam@gmail.com>
 Tejas Tyagi <tejastyagi.tt@gmail.com>
-R Sai Pranav <rajasaipranav0@gmail.com>
 ```
 
 ## Contributing
