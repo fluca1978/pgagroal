@@ -847,14 +847,20 @@ password:
    fputs(entry, users_file);
 
    free(entry);
+   entry = NULL;
    free(master_key);
+   master_key = NULL;
    free(encrypted);
+   encrypted = NULL;
    free(encoded);
+   encoded = NULL;
    if (do_free)
    {
       free(password);
+      password = NULL;
    }
    free(verify);
+   verify = NULL;
 
    fclose(users_file);
    users_file = NULL;
@@ -1175,13 +1181,18 @@ password:
    }
 
    free(master_key);
+   master_key = NULL;
    free(encrypted);
+   encrypted = NULL;
    free(encoded);
+   encoded = NULL;
    if (do_free)
    {
       free(password);
+      password = NULL;
    }
    free(verify);
+   verify = NULL;
 
    fclose(users_file);
    users_file = NULL;
