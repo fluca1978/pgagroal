@@ -903,6 +903,11 @@ pgagroal_append(char* orig, char* s)
 
    n = (char*)realloc(orig, orig_length + s_length + 1);
 
+   if (n == NULL)
+   {
+      return orig;
+   }
+
    memcpy(n + orig_length, s, s_length);
 
    n[orig_length + s_length] = '\0';
